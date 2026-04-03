@@ -40,14 +40,14 @@ FastAPI Backend
 - **Backend:** Python, FastAPI, LangChain/LangGraph, ChromaDB, sentence-transformers
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 - **Game engine:** [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames) (PyTorch, Cython MCTS, bitboard engine)
-- **LLM:** Google Gemini 2.5 Flash (via LangChain)
+- **LLM:** Google Gemini or Anthropic Claude (auto-detected from API key)
 
 ## Prerequisites
 
 - Python 3.10+
 - Node.js 18+
 - A C compiler (MSVC on Windows, gcc on Linux) — required for Cython extensions in alphazero-boardgames
-- A Google AI API key ([get one free](https://aistudio.google.com/))
+- An LLM API key — either [Google AI](https://aistudio.google.com/) (free tier) or [Anthropic](https://console.anthropic.com/)
 
 ## Setup
 
@@ -67,7 +67,7 @@ pip install -r requirements.txt
 
 # Set environment variables
 cp .env.example .env
-# Edit .env with your GOOGLE_API_KEY
+# Edit .env with your API key (GOOGLE_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)
 
 # Start the backend
 uvicorn core.api.server:app --reload

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 
 interface Message {
-  role: 'coach' | 'user';
+  role: 'coach' | 'user' | 'error';
   content: string;
 }
 
@@ -25,57 +25,63 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
     }
   };
 
-  // Auto-analyze after each AI move (move number changes by 2: player + AI)
+  const appendToken = (token: string) => {
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last && last.role === 'coach') {
+        updated[updated.length - 1] = { ...last, content: last.content + token };
+      }
+      return updated;
+    });
+    scrollToBottom();
+  };
+
+  const handleStreamError = (err: unknown) => {
+    setStreaming(false);
+    const raw = err instanceof Error ? err.message : 'Coach unavailable';
+    const msg = raw.includes('429') || raw.includes('RESOURCE_EXHAUSTED') || raw.includes('quota') || raw.includes('rate')
+      ? 'LLM API rate limit reached. Try again later or check your API plan.'
+      : raw;
+    // Replace empty "Thinking..." message with error
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last && last.role === 'coach' && !last.content) {
+        updated[updated.length - 1] = { role: 'error', content: msg };
+      } else {
+        updated.push({ role: 'error', content: msg });
+      }
+      return updated;
+    });
+  };
+
+  const startStream = (streamFn: () => Promise<void>) => {
+    setStreaming(true);
+    setMessages((prev) => [...prev, { role: 'coach', content: '' }]);
+    streamFn().catch(handleStreamError);
+  };
+
+  // Auto-analyze after each AI move
   useEffect(() => {
     if (!gameId || moveNumber < 2 || streaming) return;
     if (moveNumber <= lastAnalyzedMove.current) return;
 
     lastAnalyzedMove.current = moveNumber;
-    setStreaming(true);
-
-    setMessages((prev) => [...prev, { role: 'coach', content: '' }]);
-
-    api.streamCoachAnalysis(
-      gameId,
-      (token) => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === 'coach') {
-            updated[updated.length - 1] = { ...last, content: last.content + token };
-          }
-          return updated;
-        });
-        scrollToBottom();
-      },
-      () => setStreaming(false),
-    ).catch(() => setStreaming(false));
+    startStream(() =>
+      api.streamCoachAnalysis(gameId, appendToken, () => setStreaming(false))
+    );
   }, [gameId, moveNumber, streaming]);
 
-  // Also trigger on game over
+  // Trigger on game over
   useEffect(() => {
     if (!gameId || !isTerminal || streaming) return;
-    if (lastAnalyzedMove.current === -1) return; // already analyzed end
+    if (lastAnalyzedMove.current === -1) return;
     lastAnalyzedMove.current = -1;
 
-    setStreaming(true);
-    setMessages((prev) => [...prev, { role: 'coach', content: '' }]);
-
-    api.streamCoachAnalysis(
-      gameId,
-      (token) => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === 'coach') {
-            updated[updated.length - 1] = { ...last, content: last.content + token };
-          }
-          return updated;
-        });
-        scrollToBottom();
-      },
-      () => setStreaming(false),
-    ).catch(() => setStreaming(false));
+    startStream(() =>
+      api.streamCoachAnalysis(gameId, appendToken, () => setStreaming(false))
+    );
   }, [gameId, isTerminal, streaming]);
 
   // Reset on new game
@@ -89,29 +95,11 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
 
     const q = question.trim();
     setQuestion('');
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', content: q },
-      { role: 'coach', content: '' },
-    ]);
-    setStreaming(true);
+    setMessages((prev) => [...prev, { role: 'user', content: q }]);
 
-    api.streamCoachAsk(
-      gameId,
-      q,
-      (token) => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === 'coach') {
-            updated[updated.length - 1] = { ...last, content: last.content + token };
-          }
-          return updated;
-        });
-        scrollToBottom();
-      },
-      () => setStreaming(false),
-    ).catch(() => setStreaming(false));
+    startStream(() =>
+      api.streamCoachAsk(gameId, q, appendToken, () => setStreaming(false))
+    );
   }, [gameId, question, streaming]);
 
   return (
@@ -141,6 +129,8 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
               className={`text-sm ${
                 msg.role === 'user'
                   ? 'bg-accent/10 border border-accent/20 rounded-lg px-3 py-2 text-accent'
+                  : msg.role === 'error'
+                  ? 'bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-red-400'
                   : 'text-text-primary leading-relaxed'
               }`}
             >

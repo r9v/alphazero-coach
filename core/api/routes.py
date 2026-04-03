@@ -1,8 +1,13 @@
 """Game API routes."""
 
+import os
+import time
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+
+MAX_GAMES_PER_DAY = int(os.environ.get("MAX_GAMES", "0"))  # 0 = unlimited
+_usage: dict[str, list[float]] = {}  # ip -> list of timestamps
 
 from core.api.models import (
     AiMoveResponse,
@@ -70,7 +75,19 @@ def _get_session(game_id: str) -> GameSession:
 
 
 @router.post("/new", response_model=GameStateResponse)
-def new_game():
+def new_game(request: Request):
+    if MAX_GAMES_PER_DAY:
+        ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        day_ago = now - 86400
+        # Prune old entries and count recent games
+        _usage[ip] = [t for t in _usage.get(ip, []) if t > day_ago]
+        if len(_usage[ip]) >= MAX_GAMES_PER_DAY:
+            raise HTTPException(
+                429,
+                f"Demo limit reached ({MAX_GAMES_PER_DAY} games/day). Run locally for unlimited play — see GitHub for setup instructions.",
+            )
+        _usage[ip].append(now)
     game_id = uuid.uuid4().hex[:8]
     session = _get_engine().new_game(game_id)
     return _session_to_response(game_id, session)

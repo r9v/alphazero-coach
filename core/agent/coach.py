@@ -1,14 +1,36 @@
 """LLM coaching agent that uses MCTS tools to analyze Connect 4 games."""
 
+import os
 from collections.abc import AsyncIterator
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
 from core.agent.tools import make_tools
 from core.agent.rag import StrategyKB
 from core.engine import Engine
+
+
+def _make_llm(temperature: float = 0.3):
+    """Create an LLM instance based on available API keys.
+
+    Checks env vars in order: GOOGLE_API_KEY, ANTHROPIC_API_KEY.
+    """
+    if os.environ.get("GOOGLE_API_KEY"):
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        model = os.environ.get("LLM_MODEL", "gemini-2.5-flash")
+        print(f"[coach] Using Google Gemini: {model}")
+        return ChatGoogleGenerativeAI(model=model, temperature=temperature)
+
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        from langchain_anthropic import ChatAnthropic
+        model = os.environ.get("LLM_MODEL", "claude-sonnet-4-20250514")
+        print(f"[coach] Using Anthropic Claude: {model}")
+        return ChatAnthropic(model=model, temperature=temperature)
+
+    raise RuntimeError(
+        "No LLM API key found. Set one of: GOOGLE_API_KEY, ANTHROPIC_API_KEY"
+    )
 
 SYSTEM_PROMPT = """You are an expert Connect 4 coach powered by a superhuman AlphaZero engine.
 
@@ -32,16 +54,13 @@ Guidelines:
 
 
 class Coach:
-    """Streaming coaching agent backed by Gemini + MCTS tools."""
+    """Streaming coaching agent backed by LLM + MCTS tools."""
 
     def __init__(self, engine: Engine):
         self.engine = engine
         self.kb = StrategyKB()
         tools = make_tools(engine, self.kb)
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.3,
-        )
+        llm = _make_llm()
         self.agent = create_react_agent(llm, tools)
 
     async def analyze_move(self, game_id: str) -> AsyncIterator[str]:

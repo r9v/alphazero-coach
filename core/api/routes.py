@@ -76,12 +76,6 @@ def new_game():
     return _session_to_response(game_id, session)
 
 
-@router.get("/{game_id}", response_model=GameStateResponse)
-def get_state(game_id: str):
-    session = _get_session(game_id)
-    return _session_to_response(game_id, session)
-
-
 @router.post("/{game_id}/move", response_model=GameStateResponse)
 def player_move(game_id: str, req: MoveRequest):
     _get_session(game_id)  # validate exists
@@ -113,14 +107,3 @@ def undo(game_id: str, req: UndoRequest | None = None):
     return _session_to_response(game_id, session)
 
 
-@router.post("/{game_id}/evaluate", response_model=EvalResponse)
-def evaluate(game_id: str):
-    _get_session(game_id)
-    result = _get_engine().evaluate_position(game_id)
-    return _eval_to_response(result)
-
-
-@router.delete("/{game_id}")
-def delete_game(game_id: str):
-    _get_engine().delete_game(game_id)
-    return {"ok": True}

@@ -4,7 +4,6 @@ Loads strategy documents, chunks them, embeds with sentence-transformers,
 and stores in ChromaDB for retrieval by the coaching agent.
 """
 
-import os
 from pathlib import Path
 
 import chromadb

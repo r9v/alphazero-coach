@@ -46,8 +46,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   newGame: () => request<GameState>('/game/new', { method: 'POST' }),
 
-  getState: (id: string) => request<GameState>(`/game/${id}`),
-
   playerMove: (id: string, column: number) =>
     request<GameState>(`/game/${id}/move`, {
       method: 'POST',
@@ -62,9 +60,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ count }),
     }),
-
-  evaluate: (id: string) =>
-    request<EvalResult>(`/game/${id}/evaluate`, { method: 'POST' }),
 
   streamCoachAnalysis: (id: string, onToken: (text: string) => void, onDone: () => void) =>
     streamSSE(`/coach/${id}/analyze`, {}, onToken, onDone),

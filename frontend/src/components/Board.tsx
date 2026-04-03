@@ -57,7 +57,7 @@ export default function Board({ board, legalActions, onMove, disabled, lastMove 
       <div className="bg-board-blue rounded-xl p-2 shadow-2xl">
         <div className="grid grid-cols-7 gap-1.5">
           {displayRows.map((row) =>
-            [...Array(COLS)].map((col_unused, col) => {
+            [...Array(COLS)].map((_, col) => {
               const val = board[row][col];
               const isLastMove = lastMove === col && val !== 0 &&
                 // Check this is the top piece in the column

@@ -28,7 +28,7 @@ class AskRequest(BaseModel):
     question: str
 
 
-async def _sse_stream(game_id: str, generator):
+async def _sse_stream(generator):
     """Wrap an async generator into SSE format."""
     try:
         async for chunk in generator:
@@ -44,7 +44,7 @@ async def analyze(game_id: str):
     """Stream coaching analysis of the current position."""
     coach = _get_coach()
     return StreamingResponse(
-        _sse_stream(game_id, coach.analyze_move(game_id)),
+        _sse_stream(coach.analyze_move(game_id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -59,7 +59,7 @@ async def ask(game_id: str, req: AskRequest):
     """Stream a response to a user question about the game."""
     coach = _get_coach()
     return StreamingResponse(
-        _sse_stream(game_id, coach.ask(game_id, req.question)),
+        _sse_stream(coach.ask(game_id, req.question)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

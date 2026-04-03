@@ -27,8 +27,6 @@ from utils import load_game, make_net
 
 
 GAME_NAME = "connect4"
-ROWS = 6
-COLS = 7
 
 
 @dataclass
@@ -188,6 +186,3 @@ class Engine:
         """Evaluate the current position for a game session."""
         session = self._sessions[game_id]
         return self.evaluate(session)
-
-    def delete_game(self, game_id: str) -> None:
-        self._sessions.pop(game_id, None)

@@ -1,9 +1,11 @@
 """FastAPI application with engine lifecycle management."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from dotenv import load_dotenv
 
@@ -50,3 +52,19 @@ app.include_router(coach_router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# Serve built frontend in production (when frontend/dist exists)
+_frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    from fastapi.responses import FileResponse
+
+    app.mount("/assets", StaticFiles(directory=_frontend_dist / "assets"), name="assets")
+
+    @app.get("/{path:path}")
+    def serve_spa(path: str):
+        """Serve the React SPA for any non-API route."""
+        file = _frontend_dist / path
+        if file.is_file():
+            return FileResponse(file)
+        return FileResponse(_frontend_dist / "index.html")

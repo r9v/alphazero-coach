@@ -1,4 +1,4 @@
-# Game engine (installed separately via pip install -e)
+# Game engine (installed separately — see Dockerfile or README)
 # alphazero-boardgames @ git+https://github.com/r9v/alphazero-boardgames.git
 
 # Backend
@@ -17,9 +17,3 @@ langgraph>=0.2
 langchain-community>=0.3
 chromadb>=0.5
 sentence-transformers>=3.0
-
-# Observability
-langfuse>=2.0
-
-# Database
-aiosqlite>=0.20

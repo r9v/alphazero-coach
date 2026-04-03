@@ -10,7 +10,7 @@ python-dotenv>=1.0
 
 # LLM / Agent
 langchain>=0.3
-langchain-anthropic>=0.3
+langchain-google-genai>=2.0
 langgraph>=0.2
 
 # RAG

@@ -5,8 +5,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from core.api.routes import router, set_engine
+from core.api.coach_routes import coach_router, set_coach
 from core.engine import Engine
+from core.agent.coach import Coach
 
 
 @asynccontextmanager
@@ -14,7 +20,10 @@ async def lifespan(app: FastAPI):
     print("[server] Loading AlphaZero engine...")
     engine = Engine()
     set_engine(engine)
-    print("[server] Engine ready.")
+    print("[server] Loading coaching agent...")
+    coach = Coach(engine)
+    set_coach(coach)
+    print("[server] Ready.")
     yield
     print("[server] Shutting down.")
 
@@ -35,6 +44,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(coach_router)
 
 
 @app.get("/health")

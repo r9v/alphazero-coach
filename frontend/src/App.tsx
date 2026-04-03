@@ -3,6 +3,7 @@ import { api, type GameState, type EvalResult } from './lib/api';
 import Board from './components/Board';
 import MctsPanel from './components/MctsPanel';
 import GameInfo from './components/GameInfo';
+import CoachPanel from './components/CoachPanel';
 
 const HUMAN_PLAYER = -1; // Human plays first (red)
 
@@ -142,8 +143,13 @@ export default function App() {
             />
           </div>
 
-          {/* Right: Analysis panel */}
-          <div className="w-full lg:w-80 flex flex-col gap-4">
+          {/* Right: Analysis + Coach panels */}
+          <div className="w-full lg:w-96 flex flex-col gap-4">
+            <CoachPanel
+              gameId={game.game_id}
+              moveNumber={game.move_number}
+              isTerminal={game.is_terminal}
+            />
             <MctsPanel evaluation={evaluation} thinking={thinking} />
 
             {/* Move history */}

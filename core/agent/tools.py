@@ -3,10 +3,11 @@
 from langchain_core.tools import tool
 
 from core.engine import Engine
+from core.agent.rag import StrategyKB
 
 
-def make_tools(engine: Engine):
-    """Create tool functions bound to the given engine instance."""
+def make_tools(engine: Engine, kb: StrategyKB | None = None):
+    """Create tool functions bound to the given engine and knowledge base."""
 
     @tool
     def evaluate_position(game_id: str) -> str:
@@ -200,4 +201,25 @@ def make_tools(engine: Engine):
 
         return "\n".join(lines)
 
-    return [evaluate_position, get_best_moves, compare_moves, analyze_game, get_game_state]
+    @tool
+    def search_strategy(query: str) -> str:
+        """Search the Connect 4 strategy knowledge base for concepts related to the query.
+        Use this to find expert strategy information about topics like center control,
+        odd/even threat theory, double threats, tempo, openings, or tactical patterns.
+        Returns relevant strategy excerpts with source citations."""
+        if kb is None:
+            return "Strategy knowledge base not available."
+
+        hits = kb.search(query, n_results=3)
+        if not hits:
+            return "No relevant strategy content found."
+
+        lines = ["Strategy knowledge base results:"]
+        for i, hit in enumerate(hits, 1):
+            lines.append(f"\n--- Source: {hit['source']} ({hit['section']}) ---")
+            lines.append(hit["content"])
+
+        return "\n".join(lines)
+
+    tools = [evaluate_position, get_best_moves, compare_moves, analyze_game, get_game_state, search_strategy]
+    return tools

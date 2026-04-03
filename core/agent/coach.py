@@ -7,6 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
 from core.agent.tools import make_tools
+from core.agent.rag import StrategyKB
 from core.engine import Engine
 
 SYSTEM_PROMPT = """You are an expert Connect 4 coach powered by a superhuman AlphaZero engine.
@@ -25,6 +26,8 @@ Guidelines:
 - Q-values are from the AI's perspective: positive = AI is winning, negative = human is winning.
   Flip this when explaining to the human (positive Q for AI = bad for human).
 - Use terms like "winning position", "slight edge", "roughly equal", "losing" based on Q-values.
+- Use search_strategy to look up Connect 4 concepts (center control, odd/even theory, double threats,
+  tempo, openings) when they're relevant to explaining a position. Cite the concept by name.
 """
 
 
@@ -33,7 +36,8 @@ class Coach:
 
     def __init__(self, engine: Engine):
         self.engine = engine
-        tools = make_tools(engine)
+        self.kb = StrategyKB()
+        tools = make_tools(engine, self.kb)
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             temperature=0.3,

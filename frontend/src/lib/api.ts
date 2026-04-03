@@ -106,7 +106,16 @@ async function streamSSE(
       if (!line.startsWith('data: ')) continue;
       try {
         const event = JSON.parse(line.slice(6));
-        if (event.type === 'token') onToken(event.content);
+        if (event.type === 'token') {
+          // Gemini sometimes sends content as [{type:"text", text:"..."}] instead of a string
+          const content = event.content;
+          if (typeof content === 'string') {
+            onToken(content);
+          } else if (Array.isArray(content)) {
+            const text = content.map((c: { text?: string }) => c.text || '').join('');
+            if (text) onToken(text);
+          }
+        }
         else if (event.type === 'done') onDone();
         else if (event.type === 'error') throw new Error(event.content);
       } catch {

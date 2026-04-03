@@ -1,0 +1,183 @@
+import { useCallback, useEffect, useState } from 'react';
+import { api, type GameState, type EvalResult } from './lib/api';
+import Board from './components/Board';
+import MctsPanel from './components/MctsPanel';
+import GameInfo from './components/GameInfo';
+
+const HUMAN_PLAYER = -1; // Human plays first (red)
+
+export default function App() {
+  const [game, setGame] = useState<GameState | null>(null);
+  const [evaluation, setEvaluation] = useState<EvalResult | null>(null);
+  const [thinking, setThinking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const startNewGame = useCallback(async () => {
+    try {
+      setError(null);
+      setEvaluation(null);
+      const state = await api.newGame();
+      setGame(state);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start game');
+    }
+  }, []);
+
+  useEffect(() => {
+    startNewGame();
+  }, [startNewGame]);
+
+  const handleMove = useCallback(async (col: number) => {
+    if (!game || thinking || game.is_terminal) return;
+
+    try {
+      setError(null);
+      // Player move
+      const afterPlayer = await api.playerMove(game.game_id, col);
+      setGame(afterPlayer);
+
+      if (afterPlayer.is_terminal) return;
+
+      // AI move
+      setThinking(true);
+      const { game_state, evaluation: eval_ } = await api.aiMove(game.game_id);
+      setGame(game_state);
+      setEvaluation(eval_);
+      setThinking(false);
+    } catch (e) {
+      setThinking(false);
+      setError(e instanceof Error ? e.message : 'Move failed');
+    }
+  }, [game, thinking]);
+
+  const handleUndo = useCallback(async () => {
+    if (!game || thinking || game.move_number < 2) return;
+
+    try {
+      setError(null);
+      setEvaluation(null);
+      // Undo both AI and player move
+      const state = await api.undo(game.game_id, 2);
+      setGame(state);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Undo failed');
+    }
+  }, [game, thinking]);
+
+  if (!game) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-text-secondary">
+          {error ? (
+            <div className="text-center">
+              <p className="text-red-400 mb-4">{error}</p>
+              <button
+                onClick={startNewGame}
+                className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/80 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            'Loading...'
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const lastMove = game.move_history.length > 0
+    ? game.move_history[game.move_history.length - 1]
+    : null;
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="border-b border-border px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold text-text-primary">AlphaZero Coach</h1>
+            <span className="text-xs px-2 py-0.5 bg-accent/10 text-accent rounded-full border border-accent/20">
+              Connect 4
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleUndo}
+              disabled={thinking || game.move_number < 2}
+              className="px-3 py-1.5 text-sm text-text-secondary border border-border rounded-lg hover:bg-surface-alt transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Undo
+            </button>
+            <button
+              onClick={startNewGame}
+              disabled={thinking}
+              className="px-3 py-1.5 text-sm bg-accent text-white rounded-lg hover:bg-accent/80 transition-colors disabled:opacity-50"
+            >
+              New Game
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="flex-1 flex items-start justify-center p-6">
+        <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-6 items-start">
+          {/* Left: Board */}
+          <div className="flex flex-col items-center gap-4">
+            <Board
+              board={game.board}
+              legalActions={game.legal_actions}
+              onMove={handleMove}
+              disabled={thinking || game.is_terminal || game.player !== HUMAN_PLAYER}
+              lastMove={lastMove}
+            />
+            <GameInfo
+              player={game.player}
+              moveNumber={game.move_number}
+              isTerminal={game.is_terminal}
+              winner={game.winner}
+              thinking={thinking}
+            />
+          </div>
+
+          {/* Right: Analysis panel */}
+          <div className="w-full lg:w-80 flex flex-col gap-4">
+            <MctsPanel evaluation={evaluation} thinking={thinking} />
+
+            {/* Move history */}
+            {game.move_history.length > 0 && (
+              <div className="bg-surface-alt rounded-xl border border-border p-4">
+                <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wide mb-3">
+                  Move History
+                </h3>
+                <div className="flex flex-wrap gap-1">
+                  {game.move_history.map((move, i) => (
+                    <span
+                      key={i}
+                      className={`inline-flex items-center gap-1 text-xs font-mono px-2 py-1 rounded ${
+                        i % 2 === 0
+                          ? 'bg-piece-red/10 text-piece-red'
+                          : 'bg-piece-yellow/10 text-piece-yellow'
+                      }`}
+                    >
+                      <span className="text-text-secondary">{i + 1}.</span>
+                      C{move}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

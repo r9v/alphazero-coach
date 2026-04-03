@@ -1,53 +1,53 @@
 # AlphaZero Coach
 
-AI-powered Connect 4 coach that analyzes positions, explains strategy, and reviews your games move by move. Built on top of [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames) — a from-scratch AlphaZero implementation with Cython-accelerated MCTS and bitboard game engine.
+AI-powered Connect 4 coaching platform. Play against a superhuman AlphaZero agent in the browser while an LLM coach analyzes positions in real time — powered by Monte Carlo Tree Search evaluation and a strategy knowledge base.
 
-You play Connect 4 against a superhuman AlphaZero agent in the browser. A coaching agent watches the game in real time, evaluates positions by calling MCTS as a tool, and streams natural-language analysis explaining why moves are good or bad — with citations from a strategy knowledge base.
+Built on top of [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames), my from-scratch AlphaZero implementation with Cython-accelerated MCTS, PyTorch neural network, and bitboard game engine. The Connect 4 model was trained via self-play and defeated 2200 Elo bots.
 
 ## Features
 
-- **Live coaching** — real-time position analysis streamed as you play, powered by MCTS evaluation + LLM interpretation
-- **Post-game review** — move-by-move breakdown identifying the critical turning point (biggest win-probability swing)
-- **Conversational Q&A** — ask the coach about any position: "Why is column 4 better than column 3?"
-- **Strategy knowledge base (RAG)** — coach cites Connect 4 strategy concepts (threats, tempo, odd/even theory) from an indexed corpus
-- **Game history** — past games and conversations persisted in SQLite, resumable across sessions
-- **Observability** — full LLM agent traces (tool calls, reasoning, latency) via Langfuse
+- **Play against AlphaZero** — interactive Connect 4 board with animated piece drops and hover previews
+- **Live coaching** — after each move, an LLM agent evaluates the position via MCTS and streams natural-language analysis
+- **MCTS analysis panel** — visual breakdown of the AI's thinking: visit counts, Q-values, and network priors per column
+- **Conversational Q&A** — ask the coach anything: "Why is column 4 better than column 3?"
+- **Strategy knowledge base (RAG)** — coach cites Connect 4 concepts (center control, odd/even theory, threats, tempo) from an indexed corpus via ChromaDB
+- **Post-game review** — full game replay identifying the critical turning point (biggest evaluation swing)
 
 ## Architecture
 
 ```
-React Frontend (Vite + Tailwind)
+React Frontend (Vite + TypeScript + Tailwind)
 ├── Interactive board (play against AlphaZero)
-└── Coach chat panel (streaming SSE, conversation history, source citations)
+├── AI Coach chat panel (SSE streaming, Q&A)
+└── MCTS analysis panel (bar charts, Q-values)
         │
         │ REST + SSE
         ▼
 FastAPI Backend
-├── Game engine — MCTS evaluation, step/undo, game state management
-├── Agent — LLM orchestrator with tools:
-│   ├── evaluate_position  →  runs MCTS, returns Q-values + win/draw/loss probs
-│   ├── get_best_moves     →  top-K moves with visit counts + network prior
-│   ├── compare_moves      →  side-by-side evaluation of two candidate moves
-│   ├── analyze_game       →  full game replay with critical moment detection
+├── Game engine — MCTS evaluation, step/undo, game state
+├── LLM Agent (LangGraph) with tools:
+│   ├── evaluate_position  →  MCTS Q-values + win/draw/loss probs
+│   ├── get_best_moves     →  top-K moves with visit counts + priors
+│   ├── compare_moves      →  side-by-side move comparison
+│   ├── analyze_game       →  full replay + critical moment detection
+│   ├── get_game_state     →  board state as text
 │   └── search_strategy    →  RAG search over strategy corpus
-├── SQLite — game logs + chat history
-└── Langfuse — LLM call tracing + tool use spans
+└── RAG pipeline — ChromaDB + sentence-transformers embeddings
 ```
 
 ## Tech Stack
 
-- **Backend:** FastAPI, LangChain/LangGraph, SQLite, Langfuse
+- **Backend:** Python, FastAPI, LangChain/LangGraph, ChromaDB, sentence-transformers
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 - **Game engine:** [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames) (PyTorch, Cython MCTS, bitboard engine)
-- **LLM:** Anthropic Claude (via API)
+- **LLM:** Google Gemini 2.5 Flash (via LangChain)
 
 ## Prerequisites
 
 - Python 3.10+
 - Node.js 18+
-- A C compiler (MSVC on Windows, gcc on Linux) — required to build the Cython extensions in alphazero-boardgames
-- An Anthropic API key
-- (Optional) Langfuse account for observability
+- A C compiler (MSVC on Windows, gcc on Linux) — required for Cython extensions in alphazero-boardgames
+- A Google AI API key ([get one free](https://aistudio.google.com/))
 
 ## Setup
 
@@ -67,7 +67,7 @@ pip install -r requirements.txt
 
 # Set environment variables
 cp .env.example .env
-# Edit .env with your ANTHROPIC_API_KEY (and optionally LANGFUSE_* keys)
+# Edit .env with your GOOGLE_API_KEY
 
 # Start the backend
 uvicorn core.api.server:app --reload
@@ -80,20 +80,14 @@ npm run dev
 # Open http://localhost:5173
 ```
 
-## Project Structure
+## How It Works
 
-```
-alphazero-coach/
-├── core/
-│   ├── api/            # FastAPI app (routes, models, SSE streaming)
-│   ├── agent/          # LLM agent, tools (MCTS wrappers), RAG pipeline
-│   └── db.py           # SQLite — game logs + chat history
-├── frontend/           # React app (board + chat panel)
-├── data/
-│   └── strategy/       # RAG corpus (Connect 4 strategy documents)
-├── requirements.txt
-└── README.md
-```
+1. You play a move on the board (Red pieces)
+2. The AlphaZero engine responds via 200 MCTS simulations (Yellow pieces)
+3. The MCTS analysis panel shows visit counts and Q-values for each column
+4. The LLM coaching agent receives the game state, calls MCTS tools to evaluate the position, optionally searches the strategy knowledge base, and streams a natural-language explanation of what's happening
+
+The coach uses a ReAct agent loop — it decides which tools to call based on the situation, gets real data from the engine, then interprets it for the human player.
 
 ## License
 

@@ -26,13 +26,9 @@ function pieceShadow(val: number): string {
 export default function Board({ board, legalActions, onMove, disabled, lastMove }: Props) {
   const [hoverCol, setHoverCol] = useState<number | null>(null);
 
-  // Board is stored as board[row][col] with row 0 = bottom
-  // We render top-to-bottom so reverse the row order
   const displayRows = [...Array(ROWS)].map((_, i) => ROWS - 1 - i);
-
   const isLegal = (col: number) => legalActions.includes(col);
 
-  // Find the row where a piece would land in a column (for hover preview)
   const landingRow = (col: number): number | null => {
     for (let r = 0; r < ROWS; r++) {
       if (board[r][col] === 0) return r;
@@ -40,27 +36,18 @@ export default function Board({ board, legalActions, onMove, disabled, lastMove 
     return null;
   };
 
-  return (
-    <div className="inline-block">
-      {/* Column hover indicators */}
-      <div className="grid grid-cols-7 gap-1 mb-1 px-2">
-        {[...Array(COLS)].map((_, col) => (
-          <div key={col} className="flex justify-center h-6">
-            {hoverCol === col && isLegal(col) && !disabled && (
-              <div className="w-3 h-3 rounded-full bg-piece-red/60 animate-pulse mt-auto" />
-            )}
-          </div>
-        ))}
-      </div>
+  const cell = 'aspect-square w-full';
+  const piece = 'aspect-square w-[85%]';
 
+  return (
+    <div className="w-full lg:w-[450px] lg:shrink-0 xl:w-[560px]">
       {/* Board frame */}
-      <div className="bg-board-blue rounded-xl p-2 shadow-2xl">
-        <div className="grid grid-cols-7 gap-1.5">
+      <div className="bg-board-blue rounded-xl p-1.5 sm:p-2.5 shadow-2xl">
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {displayRows.map((row) =>
             [...Array(COLS)].map((_, col) => {
               const val = board[row][col];
               const isLastMove = lastMove === col && val !== 0 &&
-                // Check this is the top piece in the column
                 (row === ROWS - 1 || board[row + 1][col] === 0);
               const isHoverTarget = hoverCol === col && val === 0 &&
                 landingRow(col) === row && isLegal(col) && !disabled;
@@ -68,7 +55,7 @@ export default function Board({ board, legalActions, onMove, disabled, lastMove 
               return (
                 <div
                   key={`${row}-${col}`}
-                  className="w-14 h-14 rounded-full bg-board-slot flex items-center justify-center cursor-pointer transition-colors hover:bg-board-slot/80"
+                  className={`${cell} rounded-full bg-board-slot flex items-center justify-center cursor-pointer transition-colors hover:bg-board-slot/80`}
                   onMouseEnter={() => setHoverCol(col)}
                   onMouseLeave={() => setHoverCol(null)}
                   onClick={() => {
@@ -77,12 +64,12 @@ export default function Board({ board, legalActions, onMove, disabled, lastMove 
                 >
                   {val !== 0 ? (
                     <div
-                      className={`w-12 h-12 rounded-full ${pieceColor(val)} ${pieceShadow(val)} ${
+                      className={`${piece} rounded-full ${pieceColor(val)} ${pieceShadow(val)} ${
                         isLastMove ? 'animate-drop' : ''
                       }`}
                     />
                   ) : isHoverTarget ? (
-                    <div className="w-12 h-12 rounded-full bg-piece-red/20 border-2 border-piece-red/30" />
+                    <div className={`${piece} rounded-full bg-piece-red/20 border-2 border-piece-red/30`} />
                   ) : null}
                 </div>
               );
@@ -92,7 +79,7 @@ export default function Board({ board, legalActions, onMove, disabled, lastMove 
       </div>
 
       {/* Column numbers */}
-      <div className="grid grid-cols-7 gap-1 mt-2 px-2">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 mt-2 px-2">
         {[...Array(COLS)].map((_, col) => (
           <div key={col} className="text-center text-xs text-text-secondary font-mono">
             {col}

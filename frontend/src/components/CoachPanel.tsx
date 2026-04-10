@@ -64,25 +64,25 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
 
   // Auto-analyze after each AI move
   useEffect(() => {
-    if (!gameId || moveNumber < 2 || streaming) return;
+    if (!gameId || moveNumber < 2) return;
     if (moveNumber <= lastAnalyzedMove.current) return;
 
     lastAnalyzedMove.current = moveNumber;
     startStream(() =>
       api.streamCoachAnalysis(gameId, appendToken, () => setStreaming(false))
     );
-  }, [gameId, moveNumber, streaming]);
+  }, [gameId, moveNumber]);
 
   // Trigger on game over
   useEffect(() => {
-    if (!gameId || !isTerminal || streaming) return;
+    if (!gameId || !isTerminal) return;
     if (lastAnalyzedMove.current === -1) return;
     lastAnalyzedMove.current = -1;
 
     startStream(() =>
       api.streamCoachAnalysis(gameId, appendToken, () => setStreaming(false))
     );
-  }, [gameId, isTerminal, streaming]);
+  }, [gameId, isTerminal]);
 
   // Reset on new game
   useEffect(() => {
@@ -153,7 +153,7 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Ask the coach..."
             disabled={streaming || !gameId}
-            className="flex-1 bg-board-slot border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent disabled:opacity-50"
+            className="flex-1 min-w-0 bg-board-slot border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent disabled:opacity-50"
           />
           <button
             type="submit"

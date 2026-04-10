@@ -98,7 +98,7 @@ export default function App() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-text-primary">AlphaZero Coach</h1>
-            <span className="text-xs px-2 py-0.5 bg-accent/10 text-accent rounded-full border border-accent/20">
+            <span className="hidden sm:inline text-xs px-2 py-0.5 bg-accent/10 text-accent rounded-full border border-accent/20">
               Connect 4
             </span>
           </div>
@@ -123,10 +123,10 @@ export default function App() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex items-start justify-center p-6">
-        <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-6 items-start">
+      <main className="flex-1 px-3 py-4 sm:px-6 sm:py-6">
+        <div className="max-w-6xl mx-auto flex flex-col items-center lg:flex-row lg:items-start gap-6">
           {/* Left: Board */}
-          <div className="flex flex-col items-center gap-4">
+          <div className="w-full lg:w-auto flex flex-col items-center gap-4">
             <Board
               board={game.board}
               legalActions={game.legal_actions}
@@ -144,7 +144,7 @@ export default function App() {
           </div>
 
           {/* Right: Analysis + Coach panels */}
-          <div className="w-full lg:w-96 flex flex-col gap-4">
+          <div className="w-full lg:flex-1 lg:min-w-0 flex flex-col gap-4">
             <CoachPanel
               gameId={game.game_id}
               moveNumber={game.move_number}

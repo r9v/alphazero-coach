@@ -3,6 +3,10 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      screens: {
+        'lg': '768px',
+        'xl': '992px',
+      },
       colors: {
         'board-blue': '#1e3a5f',
         'board-slot': '#0f1b2d',

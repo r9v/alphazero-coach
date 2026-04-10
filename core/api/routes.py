@@ -116,6 +116,13 @@ def ai_move(game_id: str):
     )
 
 
+@router.post("/{game_id}/evaluate", response_model=EvalResponse)
+def evaluate(game_id: str):
+    _get_session(game_id)
+    result = _get_engine().evaluate_position(game_id)
+    return _eval_to_response(result)
+
+
 @router.post("/{game_id}/undo", response_model=GameStateResponse)
 def undo(game_id: str, req: UndoRequest | None = None):
     _get_session(game_id)

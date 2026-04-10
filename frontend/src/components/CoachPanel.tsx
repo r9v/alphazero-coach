@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Markdown from 'react-markdown';
 import { api } from '../lib/api';
 
 interface Message {
@@ -12,12 +13,16 @@ interface Props {
   isTerminal: boolean;
 }
 
+const AUTO_MSG = 'A new move was played. Check the board state and best moves, then give a brief strategic tip.';
+
 export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [question, setQuestion] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastAnalyzedMove = useRef(0);
+  const streamingRef = useRef(false);
+  const pendingMove = useRef<number | null>(null);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -38,12 +43,14 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
   };
 
   const handleStreamError = (err: unknown) => {
+    streamingRef.current = false;
     setStreaming(false);
     const raw = err instanceof Error ? err.message : 'Coach unavailable';
     const msg = raw.includes('429') || raw.includes('RESOURCE_EXHAUSTED') || raw.includes('quota') || raw.includes('rate')
       ? 'LLM API rate limit reached. Try again later or check your API plan.'
+      : raw.includes('overloaded') || raw.includes('Overloaded') || raw.includes('529')
+      ? 'LLM API is temporarily overloaded. Try again in a few seconds.'
       : raw;
-    // Replace empty "Thinking..." message with error
     setMessages((prev) => {
       const updated = [...prev];
       const last = updated[updated.length - 1];
@@ -56,22 +63,33 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
     });
   };
 
-  const startStream = (streamFn: () => Promise<void>) => {
+  const doSend = useCallback((gid: string, message: string) => {
+    streamingRef.current = true;
     setStreaming(true);
     setMessages((prev) => [...prev, { role: 'coach', content: '' }]);
-    streamFn().catch(handleStreamError);
-  };
+    api.streamCoachChat(gid, message, appendToken, () => {
+      streamingRef.current = false;
+      setStreaming(false);
+      if (pendingMove.current !== null) {
+        lastAnalyzedMove.current = pendingMove.current;
+        pendingMove.current = null;
+      }
+    }).catch(handleStreamError);
+  }, []);
 
   // Auto-analyze after each AI move
   useEffect(() => {
     if (!gameId || moveNumber < 2) return;
+    if (moveNumber % 2 !== 0) return;
     if (moveNumber <= lastAnalyzedMove.current) return;
 
+    if (streamingRef.current) {
+      pendingMove.current = moveNumber;
+      return;
+    }
     lastAnalyzedMove.current = moveNumber;
-    startStream(() =>
-      api.streamCoachAnalysis(gameId, appendToken, () => setStreaming(false))
-    );
-  }, [gameId, moveNumber]);
+    doSend(gameId, AUTO_MSG);
+  }, [gameId, moveNumber, doSend]);
 
   // Trigger on game over
   useEffect(() => {
@@ -79,28 +97,25 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
     if (lastAnalyzedMove.current === -1) return;
     lastAnalyzedMove.current = -1;
 
-    startStream(() =>
-      api.streamCoachAnalysis(gameId, appendToken, () => setStreaming(false))
-    );
-  }, [gameId, isTerminal]);
+    if (streamingRef.current) return;
+    doSend(gameId, 'The game is over. How did it go? What was the turning point?');
+  }, [gameId, isTerminal, doSend]);
 
   // Reset on new game
   useEffect(() => {
     setMessages([]);
     lastAnalyzedMove.current = 0;
+    pendingMove.current = null;
   }, [gameId]);
 
   const handleAsk = useCallback(() => {
-    if (!gameId || !question.trim() || streaming) return;
+    if (!gameId || !question.trim() || streamingRef.current) return;
 
     const q = question.trim();
     setQuestion('');
     setMessages((prev) => [...prev, { role: 'user', content: q }]);
-
-    startStream(() =>
-      api.streamCoachAsk(gameId, q, appendToken, () => setStreaming(false))
-    );
-  }, [gameId, question, streaming]);
+    doSend(gameId, q);
+  }, [gameId, question, doSend]);
 
   return (
     <div className="bg-surface-alt rounded-xl border border-border flex flex-col h-96">
@@ -134,7 +149,9 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
                   : 'text-text-primary leading-relaxed'
               }`}
             >
-              {msg.content || (streaming && i === messages.length - 1 ? (
+              {msg.content ? (
+                msg.role === 'coach' ? <Markdown>{msg.content}</Markdown> : msg.content
+              ) : (streaming && i === messages.length - 1 ? (
                 <span className="text-text-secondary">Thinking...</span>
               ) : null)}
             </div>

@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(_env_path)
+load_dotenv(_env_path, override=True)
 
 from core.api.routes import router, set_engine
 from core.api.coach_routes import coach_router, set_coach

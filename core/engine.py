@@ -89,7 +89,7 @@ class GameSession:
 class Engine:
     """Connect 4 engine backed by AlphaZero MCTS."""
 
-    def __init__(self, checkpoint_dir: str | None = None, simulations: int = 200):
+    def __init__(self, checkpoint_dir: str | None = None, simulations: int = 400):
         self.game = load_game(GAME_NAME)
         cfg = GAME_CONFIGS[GAME_NAME]
 
@@ -136,7 +136,18 @@ class Engine:
             raise ValueError("Game is already over")
 
         eval_result = self.evaluate(session)
-        action = eval_result.best_action
+
+        # Add temperature in early game for variety (first 8 moves)
+        if session.move_number < 8:
+            visits = np.array([m.visit_share for m in eval_result.move_stats])
+            cols = np.array([m.column for m in eval_result.move_stats])
+            # Temperature-scaled sampling — higher temp = more random
+            temp = 0.8 if session.move_number < 4 else 0.4
+            probs = visits ** (1 / temp)
+            probs = probs / probs.sum()
+            action = int(np.random.choice(cols, p=probs))
+        else:
+            action = eval_result.best_action
 
         new_state = self.game.step(session.current_state, action)
         session.states.append(new_state)

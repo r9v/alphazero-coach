@@ -6,6 +6,47 @@ from core.engine import Engine
 from core.agent.rag import StrategyKB
 
 
+def _find_threats(board) -> list[str]:
+    """Find all 3-in-a-row with a playable empty 4th square."""
+    rows, cols = 6, 7
+    threats = []
+    names = {-1: "Red", 1: "Yellow"}
+
+    def is_playable(r, c):
+        """Check if (r, c) is empty and either on the bottom row or has a piece below."""
+        if r < 0 or r >= rows or c < 0 or c >= cols:
+            return False
+        return board[r][c] == 0 and (r == 0 or board[r - 1][c] != 0)
+
+    # Directions: horizontal, vertical, both diagonals
+    directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+
+    for r in range(rows):
+        for c in range(cols):
+            for dr, dc in directions:
+                # Check if 4 cells are in bounds
+                cells = [(r + dr * i, c + dc * i) for i in range(4)]
+                if any(cr < 0 or cr >= rows or cc < 0 or cc >= cols for cr, cc in cells):
+                    continue
+
+                values = [board[cr][cc] for cr, cc in cells]
+                for player in [-1, 1]:
+                    count = values.count(player)
+                    empties = [(cr, cc) for (cr, cc), v in zip(cells, values) if v == 0]
+                    if count == 3 and len(empties) == 1:
+                        er, ec = empties[0]
+                        if is_playable(er, ec):
+                            direction = {(0,1): "horizontal", (1,0): "vertical",
+                                        (1,1): "diagonal ↗", (1,-1): "diagonal ↘"}[(dr, dc)]
+                            threats.append(
+                                f"{names[player]} can win at column {ec} (row {er}) — "
+                                f"{direction} threat"
+                            )
+
+    # Deduplicate
+    return list(dict.fromkeys(threats))
+
+
 def make_tools(engine: Engine, kb: StrategyKB | None = None):
     """Create tool functions bound to the given engine and knowledge base."""
 
@@ -17,7 +58,6 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         session = engine.get_session(game_id)
         if session is None:
             return "Error: game not found"
-
         result = engine.evaluate(session)
 
         lines = [
@@ -43,7 +83,6 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         session = engine.get_session(game_id)
         if session is None:
             return "Error: game not found"
-
         result = engine.evaluate(session)
         top = result.move_stats[:top_k]
 
@@ -120,7 +159,7 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         evals = []
 
         for i, move in enumerate(session.move_history):
-            pi = engine.mcts.get_policy(100, state)  # fewer sims for speed
+            pi = engine.mcts.get_policy(400, state)  # fewer sims for game replay speed
             root = engine.mcts.last_root
             best = int(np.argmax(pi))
             evals.append({
@@ -176,20 +215,41 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         session = engine.get_session(game_id)
         if session is None:
             return "Error: game not found"
-
         board = session.current_state.board
         symbols = {0: ".", -1: "X", 1: "O"}
-        lines = ["Current board (X=Red/Human, O=Yellow/AI):"]
+        lines = ["Current board (X=Red/You, O=Yellow/AI):"]
+        lines.append("  Col:  0 1 2 3 4 5 6")
         for r in range(5, -1, -1):
             row = " ".join(symbols[board[r][c]] for c in range(7))
-            lines.append(f"  {row}")
-        lines.append("  0 1 2 3 4 5 6")
+            lines.append(f"  Row {r}: {row}")
         lines.append("")
 
-        player = "Red (Human)" if session.player == -1 else "Yellow (AI)"
+        # Describe each column's contents explicitly
+        for c in range(7):
+            pieces = []
+            for r in range(6):
+                if board[r][c] != 0:
+                    who = "Red" if board[r][c] == -1 else "Yellow"
+                    pieces.append(f"{who}@row{r}")
+            count = len(pieces)
+            remaining = 6 - count
+            status = "FULL" if remaining == 0 else f"{remaining} slots left"
+            if pieces:
+                lines.append(f"  Column {c} ({status}): {', '.join(pieces)}")
+            else:
+                lines.append(f"  Column {c} (empty)")
+        lines.append("")
+
+        player = "Red (You)" if session.player == -1 else "Yellow (AI)"
         lines.append(f"  Turn: {player}")
         lines.append(f"  Move: {session.move_number}")
-        lines.append(f"  History: {session.move_history}")
+
+        # Show move history with player labels
+        history_parts = []
+        for i, col in enumerate(session.move_history):
+            who = "Red" if i % 2 == 0 else "Yellow"
+            history_parts.append(f"{i+1}. {who} → C{col}")
+        lines.append(f"  History: {', '.join(history_parts) or 'none'}")
 
         if session.is_terminal:
             if session.winner == -1:
@@ -198,6 +258,17 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
                 lines.append("  Game over: Yellow wins!")
             else:
                 lines.append("  Game over: Draw!")
+        else:
+            # Scan for threats (3-in-a-row with playable empty 4th)
+            threats = _find_threats(board)
+            if threats:
+                lines.append("")
+                lines.append("  Active threats:")
+                for t in threats:
+                    lines.append(f"    {t}")
+            else:
+                lines.append("")
+                lines.append("  No immediate threats for either side.")
 
         return "\n".join(lines)
 
@@ -221,5 +292,62 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
 
         return "\n".join(lines)
 
-    tools = [evaluate_position, get_best_moves, compare_moves, analyze_game, get_game_state, search_strategy]
+    @tool
+    def evaluate_last_move(game_id: str) -> str:
+        """Evaluate whether the player's last move was good or bad.
+        Compares what the player actually played vs what the engine would have recommended.
+        Only works when there are at least 2 moves (player + AI response)."""
+        import numpy as np
+        session = engine.get_session(game_id)
+        if session is None:
+            return "Error: game not found"
+
+        if len(session.move_history) < 2:
+            return "Not enough moves to evaluate."
+
+        # Find the player's last move (second-to-last in history, since AI moved last)
+        player_move = session.move_history[-2]
+        move_num = len(session.move_history) - 1  # 1-indexed
+
+        # Replay to the position BEFORE the player's move and evaluate
+        game_obj = engine.game
+        state = game_obj.new_game()
+        for m in session.move_history[:-2]:
+            state = game_obj.step(state, m)
+
+        pi = engine.mcts.get_policy(400, state)
+        best_action = int(np.argmax(pi))
+        root = engine.mcts.last_root
+
+        played_child = root.children[player_move]
+        best_child = root.children[best_action]
+
+        played_q = float(played_child.Q) if played_child else 0
+        best_q = float(best_child.Q) if best_child else 0
+        diff = abs(best_q - played_q) * 100
+
+        if player_move == best_action:
+            return f"Your move (column {player_move}) was the engine's top choice! Well played."
+        elif diff < 3:
+            return (
+                f"Your move (column {player_move}) was fine — nearly as good as the engine's "
+                f"top pick (column {best_action}). Difference is negligible ({diff:.1f}%)."
+            )
+        elif diff < 10:
+            return (
+                f"Your move (column {player_move}) was okay but not optimal. "
+                f"The engine preferred column {best_action} (Q-diff: {diff:.1f}%). "
+                f"Column {best_action} had {int(pi[best_action]*100)}% of visits vs "
+                f"your column {player_move} at {int(pi[player_move]*100)}%."
+            )
+        else:
+            return (
+                f"Your move (column {player_move}) was a mistake. "
+                f"The engine strongly preferred column {best_action} (Q-diff: {diff:.1f}%). "
+                f"Column {best_action} had {int(pi[best_action]*100)}% of visits vs "
+                f"your column {player_move} at {int(pi[player_move]*100)}%."
+            )
+
+    tools = [evaluate_position, get_best_moves, compare_moves, analyze_game,
+             get_game_state, search_strategy, evaluate_last_move]
     return tools

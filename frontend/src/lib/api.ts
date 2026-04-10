@@ -61,11 +61,11 @@ export const api = {
       body: JSON.stringify({ count }),
     }),
 
-  streamCoachAnalysis: (id: string, onToken: (text: string) => void, onDone: () => void) =>
-    streamSSE(`/coach/${id}/analyze`, {}, onToken, onDone),
+  evaluate: (id: string) =>
+    request<EvalResult>(`/game/${id}/evaluate`, { method: 'POST' }),
 
-  streamCoachAsk: (id: string, question: string, onToken: (text: string) => void, onDone: () => void) =>
-    streamSSE(`/coach/${id}/ask`, { question }, onToken, onDone),
+  streamCoachChat: (id: string, message: string, onToken: (text: string) => void, onDone: () => void) =>
+    streamSSE(`/coach/${id}/chat`, { message }, onToken, onDone),
 };
 
 async function streamSSE(

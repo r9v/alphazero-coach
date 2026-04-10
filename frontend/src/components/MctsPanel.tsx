@@ -11,6 +11,7 @@ function formatQ(q: number): string {
 }
 
 function qColor(q: number): string {
+  // Q from player's perspective: positive = good for player, negative = bad
   if (q > 0.1) return 'text-green-400';
   if (q < -0.1) return 'text-red-400';
   return 'text-text-secondary';
@@ -27,7 +28,7 @@ export default function MctsPanel({ evaluation, thinking }: Props) {
     <div className="bg-surface-alt rounded-xl border border-border p-4">
       <div className="flex items-center gap-2 mb-3">
         <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wide">
-          MCTS Analysis
+          Your Next Recommended Move
         </h3>
         {thinking && (
           <div className="flex gap-1">
@@ -44,6 +45,12 @@ export default function MctsPanel({ evaluation, thinking }: Props) {
             {evaluation.total_simulations} simulations
           </div>
 
+          <div className="flex items-center gap-3 mb-1">
+            <span className="w-8" />
+            <span className="flex-1" />
+            <span className="text-xs font-mono text-text-secondary w-12 text-right">Eval</span>
+          </div>
+
           <div className="space-y-2">
             {evaluation.move_stats.map((stat) => {
               const pct = Math.round(stat.visit_share * 100);
@@ -58,16 +65,15 @@ export default function MctsPanel({ evaluation, thinking }: Props) {
                       C{stat.column}
                     </span>
 
-                    <div className="flex-1 h-5 bg-board-slot rounded-full overflow-hidden">
+                    <div className="flex-1 h-5 bg-board-slot rounded-full overflow-hidden relative">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${barColor(stat.q_value)}`}
                         style={{ width: `${Math.max(pct, 2)}%` }}
                       />
+                      <span className="absolute inset-0 flex items-center justify-center text-xs font-mono text-white/90">
+                        {pct}%
+                      </span>
                     </div>
-
-                    <span className="text-xs font-mono text-text-secondary w-10 text-right">
-                      {pct}%
-                    </span>
 
                     <span className={`text-xs font-mono w-12 text-right ${qColor(stat.q_value)}`}>
                       {formatQ(stat.q_value)}
@@ -80,9 +86,11 @@ export default function MctsPanel({ evaluation, thinking }: Props) {
 
           <div className="mt-3 pt-3 border-t border-border flex justify-between text-xs text-text-secondary">
             <span>Best: <span className="text-accent font-mono">Column {evaluation.best_action}</span></span>
-            <span>Eval: <span className={`font-mono ${qColor(evaluation.root_value)}`}>
-              {formatQ(evaluation.root_value)}
-            </span></span>
+            {(() => {
+              const winPct = Math.round(50 + evaluation.root_value * 50);
+              const color = winPct > 50 ? 'text-green-400' : winPct < 50 ? 'text-red-400' : 'text-text-secondary';
+              return <span>Current Position: <span className={`font-mono ${color}`}>{winPct}% win</span></span>;
+            })()}
           </div>
         </>
       ) : (

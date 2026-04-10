@@ -41,9 +41,14 @@ export default function App() {
 
       // AI move
       setThinking(true);
-      const { game_state, evaluation: eval_ } = await api.aiMove(game.game_id);
+      const { game_state } = await api.aiMove(game.game_id);
       setGame(game_state);
-      setEvaluation(eval_);
+
+      // Evaluate from player's perspective (recommended next move)
+      if (!game_state.is_terminal) {
+        const eval_ = await api.evaluate(game.game_id);
+        setEvaluation(eval_);
+      }
       setThinking(false);
     } catch (e) {
       setThinking(false);
@@ -51,19 +56,7 @@ export default function App() {
     }
   }, [game, thinking]);
 
-  const handleUndo = useCallback(async () => {
-    if (!game || thinking || game.move_number < 2) return;
 
-    try {
-      setError(null);
-      setEvaluation(null);
-      // Undo both AI and player move
-      const state = await api.undo(game.game_id, 2);
-      setGame(state);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Undo failed');
-    }
-  }, [game, thinking]);
 
   if (!game) {
     return (

@@ -24,8 +24,8 @@ def _get_coach() -> Coach:
     return _coach
 
 
-class AskRequest(BaseModel):
-    question: str
+class ChatRequest(BaseModel):
+    message: str
 
 
 async def _sse_stream(generator):
@@ -39,27 +39,12 @@ async def _sse_stream(generator):
         yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 
 
-@coach_router.post("/{game_id}/analyze")
-async def analyze(game_id: str):
-    """Stream coaching analysis of the current position."""
+@coach_router.post("/{game_id}/chat")
+async def chat(game_id: str, req: ChatRequest):
+    """Stream a coach response in the game's conversation."""
     coach = _get_coach()
     return StreamingResponse(
-        _sse_stream(coach.analyze_move(game_id)),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-@coach_router.post("/{game_id}/ask")
-async def ask(game_id: str, req: AskRequest):
-    """Stream a response to a user question about the game."""
-    coach = _get_coach()
-    return StreamingResponse(
-        _sse_stream(coach.ask(game_id, req.question)),
+        _sse_stream(coach.chat(game_id, req.message)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

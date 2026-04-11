@@ -38,7 +38,10 @@ export default function App() {
       const afterPlayer = await api.playerMove(game.game_id, col);
       setGame(afterPlayer);
 
-      if (afterPlayer.is_terminal) return;
+      if (afterPlayer.is_terminal) {
+        setEvaluation(null);
+        return;
+      }
 
       // AI move
       setThinking(true);
@@ -49,6 +52,8 @@ export default function App() {
       if (!gameAfterAi.is_terminal) {
         const eval_ = await api.evaluate(game.game_id);
         setEvaluation(eval_);
+      } else {
+        setEvaluation(null);
       }
       setThinking(false);
     } catch (e) {
@@ -137,7 +142,7 @@ export default function App() {
               moveNumber={game.move_number}
               isTerminal={game.is_terminal}
             />
-            <MctsPanel evaluation={evaluation} thinking={thinking} />
+            <MctsPanel evaluation={evaluation} thinking={thinking} isTerminal={game.is_terminal} winner={game.winner} />
 
             {/* Move history */}
             {game.move_history.length > 0 && (

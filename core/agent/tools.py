@@ -322,14 +322,17 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         if len(session.move_history) < 2:
             return "Not enough moves to evaluate."
 
-        # Find the player's last move (second-to-last in history, since AI moved last)
-        player_move = session.move_history[-2]
-        move_num = len(session.move_history) - 1  # 1-indexed
+        # Find the player's last move.
+        # Player is Red (moves at indices 0, 2, 4, ...). The last even-indexed move is the player's.
+        last_player_idx = len(session.move_history) - 1
+        if last_player_idx % 2 != 0:
+            last_player_idx -= 1  # last move was AI's, step back to player's
+        player_move = session.move_history[last_player_idx]
 
         # Replay to the position BEFORE the player's move and evaluate
         game_obj = engine.game
         state = game_obj.new_game()
-        for m in session.move_history[:-2]:
+        for m in session.move_history[:last_player_idx]:
             state = game_obj.step(state, m)
 
         pi = engine.mcts.get_policy(400, state)

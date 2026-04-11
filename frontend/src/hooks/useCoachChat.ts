@@ -58,9 +58,9 @@ export function useCoachChat(gameId: string | null, moveNumber: number, isTermin
     }).catch(handleStreamError);
   }, [appendToken, handleStreamError]);
 
-  // Auto-analyze after each AI move
+  // Auto-analyze after each AI move (skip if game just ended — let game-over effect handle it)
   useEffect(() => {
-    if (!gameId || moveNumber < 2) return;
+    if (!gameId || moveNumber < 2 || isTerminal) return;
     if (moveNumber % 2 !== 0) return;
     if (moveNumber <= lastAnalyzedMove.current) return;
 
@@ -70,7 +70,7 @@ export function useCoachChat(gameId: string | null, moveNumber: number, isTermin
     }
     lastAnalyzedMove.current = moveNumber;
     doSend(gameId, AUTO_MSG);
-  }, [gameId, moveNumber, doSend]);
+  }, [gameId, moveNumber, isTerminal, doSend]);
 
   // Trigger on game over
   useEffect(() => {

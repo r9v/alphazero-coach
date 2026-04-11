@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import { useCoachChat } from '../hooks/useCoachChat';
 import LoadingDots from './LoadingDots';
@@ -20,18 +20,11 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
   const [question, setQuestion] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  };
-
-  // Scroll when messages change
-  const lastLen = useRef(0);
-  if (messages.length !== lastLen.current) {
-    lastLen.current = messages.length;
-    queueMicrotask(scrollToBottom);
-  }
+  }, [messages]);
 
   const handleAsk = useCallback(() => {
     if (!question.trim()) return;

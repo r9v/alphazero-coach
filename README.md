@@ -4,7 +4,7 @@ AI-powered Connect 4 coaching platform. Play against a superhuman AlphaZero agen
 
 Built on top of [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames), my from-scratch AlphaZero implementation with Cython-accelerated MCTS, PyTorch neural network, and bitboard game engine. The Connect 4 model was trained via self-play and defeated 2200 Elo bots.
 
-You can play it right now — **[click here for the live demo](http://34.72.230.198:8000/)**.
+You can play it right now — **[click here for the live demo](https://alphazero-coach.xyz/)**.
 
 ![AlphaZero Coach Demo](demo.png)
 

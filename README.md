@@ -2,9 +2,9 @@
 
 AI-powered Connect 4 coaching platform. Play against a superhuman AlphaZero agent in the browser while an LLM coach analyzes positions in real time — powered by Monte Carlo Tree Search evaluation and a strategy knowledge base.
 
-![AlphaZero Coach Demo](demo.png)
-
 Built on top of [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames), my from-scratch AlphaZero implementation with Cython-accelerated MCTS, PyTorch neural network, and bitboard game engine. The Connect 4 model was trained via self-play and defeated 2200 Elo bots.
+
+![AlphaZero Coach Demo](demo.png)
 
 ## Features
 

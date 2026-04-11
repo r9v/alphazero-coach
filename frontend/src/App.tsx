@@ -41,11 +41,11 @@ export default function App() {
 
       // AI move
       setThinking(true);
-      const { game_state } = await api.aiMove(game.game_id);
-      setGame(game_state);
+      const gameAfterAi = await api.aiMove(game.game_id);
+      setGame(gameAfterAi);
 
       // Evaluate from player's perspective (recommended next move)
-      if (!game_state.is_terminal) {
+      if (!gameAfterAi.is_terminal) {
         const eval_ = await api.evaluate(game.game_id);
         setEvaluation(eval_);
       }
@@ -97,13 +97,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleUndo}
-              disabled={thinking || game.move_number < 2}
-              className="px-3 py-1.5 text-sm text-text-secondary border border-border rounded-lg hover:bg-surface-alt transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              Undo
-            </button>
             <button
               onClick={startNewGame}
               disabled={thinking}

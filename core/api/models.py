@@ -9,10 +9,6 @@ class MoveRequest(BaseModel):
     column: int = Field(ge=0, le=6, description="Column index (0-6)")
 
 
-class UndoRequest(BaseModel):
-    count: int = Field(default=1, ge=1, le=42, description="Number of moves to undo")
-
-
 # --- Responses ---
 
 class MoveStatsResponse(BaseModel):
@@ -39,8 +35,3 @@ class GameStateResponse(BaseModel):
     legal_actions: list[int]
     move_history: list[int]
     move_number: int
-
-
-class AiMoveResponse(BaseModel):
-    game_state: GameStateResponse
-    evaluation: EvalResponse

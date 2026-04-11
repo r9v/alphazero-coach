@@ -10,12 +10,10 @@ MAX_GAMES_PER_DAY = int(os.environ.get("MAX_GAMES", "0"))  # 0 = unlimited
 _usage: dict[str, list[float]] = {}  # ip -> list of timestamps
 
 from core.api.models import (
-    AiMoveResponse,
     EvalResponse,
     GameStateResponse,
     MoveRequest,
     MoveStatsResponse,
-    UndoRequest,
 )
 from core.engine import Engine, GameSession, EvalResult
 
@@ -103,17 +101,14 @@ def player_move(game_id: str, req: MoveRequest):
     return _session_to_response(game_id, session)
 
 
-@router.post("/{game_id}/ai-move", response_model=AiMoveResponse)
+@router.post("/{game_id}/ai-move", response_model=GameStateResponse)
 def ai_move(game_id: str):
     _get_session(game_id)
     try:
-        session, eval_result = _get_engine().ai_move(game_id)
+        session = _get_engine().ai_move(game_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return AiMoveResponse(
-        game_state=_session_to_response(game_id, session),
-        evaluation=_eval_to_response(eval_result),
-    )
+    return _session_to_response(game_id, session)
 
 
 @router.post("/{game_id}/evaluate", response_model=EvalResponse)
@@ -123,11 +118,5 @@ def evaluate(game_id: str):
     return _eval_to_response(result)
 
 
-@router.post("/{game_id}/undo", response_model=GameStateResponse)
-def undo(game_id: str, req: UndoRequest | None = None):
-    _get_session(game_id)
-    count = req.count if req else 1
-    session = _get_engine().undo(game_id, count)
-    return _session_to_response(game_id, session)
 
 

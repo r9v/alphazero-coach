@@ -26,11 +26,6 @@ export interface GameState {
   move_number: number;
 }
 
-export interface AiMoveResponse {
-  game_state: GameState;
-  evaluation: EvalResult;
-}
-
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -53,13 +48,7 @@ export const api = {
     }),
 
   aiMove: (id: string) =>
-    request<AiMoveResponse>(`/game/${id}/ai-move`, { method: 'POST' }),
-
-  undo: (id: string, count = 1) =>
-    request<GameState>(`/game/${id}/undo`, {
-      method: 'POST',
-      body: JSON.stringify({ count }),
-    }),
+    request<GameState>(`/game/${id}/ai-move`, { method: 'POST' }),
 
   evaluate: (id: string) =>
     request<EvalResult>(`/game/${id}/evaluate`, { method: 'POST' }),

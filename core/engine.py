@@ -89,12 +89,13 @@ class GameSession:
 class Engine:
     """Connect 4 engine backed by AlphaZero MCTS."""
 
-    def __init__(self, checkpoint_dir: str | None = None, simulations: int = 400):
+    def __init__(self, checkpoint_dir: str | None = None, simulations: int = 400, ai_simulations: int = 200):
         self.game = load_game(GAME_NAME)
         cfg = GAME_CONFIGS[GAME_NAME]
 
         self.net = make_net(self.game, GAME_NAME)
-        self.simulations = simulations
+        self.simulations = simulations        # for evaluation/coaching tools
+        self.ai_simulations = ai_simulations  # for AI opponent (weaker)
 
         # Load trained weights
         ckpt_dir = checkpoint_dir or os.path.join(_AZ_DIR, "checkpoints", GAME_NAME)
@@ -130,43 +131,33 @@ class Engine:
         session.move_history.append(column)
         return session
 
-    def ai_move(self, game_id: str) -> tuple[GameSession, EvalResult]:
+    def ai_move(self, game_id: str) -> GameSession:
         session = self._sessions[game_id]
         if session.is_terminal:
             raise ValueError("Game is already over")
 
-        eval_result = self.evaluate(session)
+        result = self.evaluate(session, simulations=self.ai_simulations)
 
         # Add temperature in early game for variety (first 8 moves)
         if session.move_number < 8:
-            visits = np.array([m.visit_share for m in eval_result.move_stats])
-            cols = np.array([m.column for m in eval_result.move_stats])
-            # Temperature-scaled sampling — higher temp = more random
+            visits = np.array([m.visit_share for m in result.move_stats])
+            cols = np.array([m.column for m in result.move_stats])
             temp = 0.8 if session.move_number < 4 else 0.4
             probs = visits ** (1 / temp)
             probs = probs / probs.sum()
             action = int(np.random.choice(cols, p=probs))
         else:
-            action = eval_result.best_action
+            action = result.best_action
 
         new_state = self.game.step(session.current_state, action)
         session.states.append(new_state)
         session.move_history.append(action)
-        return session, eval_result
-
-    def undo(self, game_id: str, count: int = 1) -> GameSession:
-        session = self._sessions[game_id]
-        actual = min(count, len(session.states) - 1)
-        if actual <= 0:
-            return session
-        session.states = session.states[:-actual]
-        session.move_history = session.move_history[:-actual]
         return session
 
-    def evaluate(self, session: GameSession) -> EvalResult:
+    def evaluate(self, session: GameSession, simulations: int | None = None) -> EvalResult:
         """Run MCTS on the current position and return detailed stats."""
         state = session.current_state
-        pi = self.mcts.get_policy(self.simulations, state)
+        pi = self.mcts.get_policy(simulations or self.simulations, state)
         root = self.mcts.last_root
 
         best_action = int(np.argmax(pi))

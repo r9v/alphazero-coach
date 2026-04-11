@@ -2,38 +2,18 @@
 
 AI-powered Connect 4 coaching platform. Play against a superhuman AlphaZero agent in the browser while an LLM coach analyzes positions in real time — powered by Monte Carlo Tree Search evaluation and a strategy knowledge base.
 
+![AlphaZero Coach Demo](demo.png)
+
 Built on top of [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames), my from-scratch AlphaZero implementation with Cython-accelerated MCTS, PyTorch neural network, and bitboard game engine. The Connect 4 model was trained via self-play and defeated 2200 Elo bots.
 
 ## Features
 
-- **Play against AlphaZero** — interactive Connect 4 board with animated piece drops and hover previews
+- **Play against AlphaZero** — interactive Connect 4 board with animated piece drops
 - **Live coaching** — after each move, an LLM agent evaluates the position via MCTS and streams natural-language analysis
-- **MCTS analysis panel** — visual breakdown of the AI's thinking: visit counts, Q-values, and network priors per column
+- **MCTS analysis panel** — visual breakdown of recommended moves with win percentage
 - **Conversational Q&A** — ask the coach anything: "Why is column 4 better than column 3?"
 - **Strategy knowledge base (RAG)** — coach cites Connect 4 concepts (center control, odd/even theory, threats, tempo) from an indexed corpus via ChromaDB
-- **Post-game review** — full game replay identifying the critical turning point (biggest evaluation swing)
-
-## Architecture
-
-```
-React Frontend (Vite + TypeScript + Tailwind)
-├── Interactive board (play against AlphaZero)
-├── AI Coach chat panel (SSE streaming, Q&A)
-└── MCTS analysis panel (bar charts, Q-values)
-        │
-        │ REST + SSE
-        ▼
-FastAPI Backend
-├── Game engine — MCTS evaluation, step/undo, game state
-├── LLM Agent (LangGraph) with tools:
-│   ├── evaluate_position  →  MCTS Q-values + win/draw/loss probs
-│   ├── get_best_moves     →  top-K moves with visit counts + priors
-│   ├── compare_moves      →  side-by-side move comparison
-│   ├── analyze_game       →  full replay + critical moment detection
-│   ├── get_game_state     →  board state as text
-│   └── search_strategy    →  RAG search over strategy corpus
-└── RAG pipeline — ChromaDB + sentence-transformers embeddings
-```
+- **Post-game review** — full game replay identifying the critical turning point
 
 ## Tech Stack
 
@@ -42,53 +22,24 @@ FastAPI Backend
 - **Game engine:** [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames) (PyTorch, Cython MCTS, bitboard engine)
 - **LLM:** Google Gemini or Anthropic Claude (auto-detected from API key)
 
-## Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- A C compiler (MSVC on Windows, gcc on Linux) — required for Cython extensions in alphazero-boardgames
-- An LLM API key — either [Google AI](https://aistudio.google.com/) (free tier) or [Anthropic](https://console.anthropic.com/)
-
-## Setup
-
-```bash
-# Clone both repos
-git clone https://github.com/r9v/alphazero-boardgames.git
-git clone https://github.com/r9v/alphazero-coach.git
-
-# Install the game engine (builds Cython extensions)
-cd alphazero-boardgames
-pip install -e .
-cd ..
-
-# Install the coach
-cd alphazero-coach
-pip install -r requirements.txt
-
-# Set environment variables
-cp .env.example .env
-# Edit .env with your API key (GOOGLE_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)
-
-# Start the backend
-uvicorn core.api.server:app --reload
-
-# In a second terminal, start the frontend
-cd frontend
-npm install
-npm run dev
-
-# Open http://localhost:5173
-```
-
 ## How It Works
 
-1. You play a move on the board (Red pieces)
-2. The AlphaZero engine responds via 200 MCTS simulations (Yellow pieces)
-3. The MCTS analysis panel shows visit counts and Q-values for each column
-4. The LLM coaching agent receives the game state, calls MCTS tools to evaluate the position, optionally searches the strategy knowledge base, and streams a natural-language explanation of what's happening
+You play Connect 4 against a superhuman AI. After each move, a coaching agent calls into the MCTS engine to evaluate the position, searches a strategy knowledge base for relevant concepts, and streams real-time advice — explaining not just what to play, but why.
 
-The coach uses a ReAct agent loop — it decides which tools to call based on the situation, gets real data from the engine, then interprets it for the human player.
+The coach is a LangGraph ReAct agent with 7 tools: position evaluation, move ranking, move comparison, game replay analysis, last-move grading, board state inspection, and strategy search. Each tool calls the real AlphaZero engine — no guessing.
 
-## License
+## Quick Start
 
-MIT
+```bash
+# With Docker
+docker-compose up --build
+# Open http://localhost:8000
+
+# Or manually
+pip install -r requirements.txt
+cp .env.example .env              # add your GOOGLE_API_KEY or ANTHROPIC_API_KEY
+uvicorn core.api.server:app       # backend
+cd frontend && npm install && npm run dev  # frontend at http://localhost:5173
+```
+
+Requires [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames) installed separately (`pip install -e .` in that repo).

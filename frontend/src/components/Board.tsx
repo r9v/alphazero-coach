@@ -11,17 +11,16 @@ interface Props {
   lastMove: number | null;
 }
 
-function pieceColor(val: number): string {
-  if (val === -1) return 'bg-piece-red';
-  if (val === 1) return 'bg-piece-yellow';
-  return '';
-}
-
-function pieceShadow(val: number): string {
-  if (val === -1) return 'shadow-[inset_0_-4px_8px_rgba(0,0,0,0.3),0_0_12px_rgba(239,68,68,0.3)]';
-  if (val === 1) return 'shadow-[inset_0_-4px_8px_rgba(0,0,0,0.3),0_0_12px_rgba(234,179,8,0.3)]';
-  return '';
-}
+const PIECE_STYLE: Record<number, { color: string; shadow: string }> = {
+  [-1]: {
+    color: 'bg-piece-red',
+    shadow: 'shadow-[inset_0_-4px_8px_rgba(0,0,0,0.3),0_0_12px_rgba(239,68,68,0.3)]',
+  },
+  [1]: {
+    color: 'bg-piece-yellow',
+    shadow: 'shadow-[inset_0_-4px_8px_rgba(0,0,0,0.3),0_0_12px_rgba(234,179,8,0.3)]',
+  },
+};
 
 export default function Board({ board, legalActions, onMove, disabled, lastMove }: Props) {
   const [hoverCol, setHoverCol] = useState<number | null>(null);
@@ -64,7 +63,7 @@ export default function Board({ board, legalActions, onMove, disabled, lastMove 
                 >
                   {val !== 0 ? (
                     <div
-                      className={`${piece} rounded-full ${pieceColor(val)} ${pieceShadow(val)} ${
+                      className={`${piece} rounded-full ${PIECE_STYLE[val].color} ${PIECE_STYLE[val].shadow} ${
                         isLastMove ? 'animate-drop' : ''
                       }`}
                     />

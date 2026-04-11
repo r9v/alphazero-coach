@@ -6,6 +6,30 @@ from core.engine import Engine
 from core.agent.rag import StrategyKB
 
 
+def _get_session_or_error(engine: Engine, game_id: str):
+    """Look up a game session, returning (session, None) or (None, error_string)."""
+    session = engine.get_session(game_id)
+    if session is None:
+        return None, "Error: game not found"
+    return session, None
+
+
+def _format_move_table(move_stats) -> list[str]:
+    """Format move stats as an aligned text table."""
+    lines = [f"  {'Col':>3}  {'Visits':>7}  {'Share':>6}  {'Q-value':>8}  {'Prior':>6}"]
+    for m in move_stats:
+        lines.append(
+            f"  C{m.column:>2}  {m.visits:>7}  {m.visit_share:>5.1%}  {m.q_value:>+8.3f}  {m.prior:>5.1%}"
+        )
+    return lines
+
+
+def _q_label(q_value: float) -> str:
+    """Human-readable label for a Q-value."""
+    q_pct = q_value * 100
+    return "winning" if q_pct > 5 else "losing" if q_pct < -5 else "roughly equal"
+
+
 def _find_threats(board) -> list[str]:
     """Find all 3-in-a-row with a playable empty 4th square."""
     rows, cols = 6, 7
@@ -55,9 +79,9 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         """Evaluate the current board position using MCTS search.
         Returns the best move, win/draw/loss estimate, and per-column statistics
         including visit counts, Q-values, and network priors."""
-        session = engine.get_session(game_id)
-        if session is None:
-            return "Error: game not found"
+        session, err = _get_session_or_error(engine, game_id)
+        if err:
+            return err
         result = engine.evaluate(session)
 
         lines = [
@@ -66,12 +90,8 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
             f"  Position value: {result.root_value:+.3f} (from AI's perspective, +1 = winning, -1 = losing)",
             "",
             "  Per-column breakdown:",
-            f"  {'Col':>3}  {'Visits':>7}  {'Share':>6}  {'Q-value':>8}  {'Prior':>6}",
+            *_format_move_table(result.move_stats),
         ]
-        for m in result.move_stats:
-            lines.append(
-                f"  C{m.column:>2}  {m.visits:>7}  {m.visit_share:>5.1%}  {m.q_value:>+8.3f}  {m.prior:>5.1%}"
-            )
 
         return "\n".join(lines)
 
@@ -80,19 +100,17 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         """Get the top-K best moves ranked by MCTS visit count.
         Each move includes visit share, Q-value (expected outcome),
         and neural network prior probability."""
-        session = engine.get_session(game_id)
-        if session is None:
-            return "Error: game not found"
+        session, err = _get_session_or_error(engine, game_id)
+        if err:
+            return err
         result = engine.evaluate(session)
         top = result.move_stats[:top_k]
 
         lines = [f"Top {len(top)} moves ({result.total_simulations} simulations):"]
         for i, m in enumerate(top, 1):
-            q_pct = m.q_value * 100
-            label = "winning" if q_pct > 5 else "losing" if q_pct < -5 else "roughly equal"
             lines.append(
                 f"  {i}. Column {m.column} — {m.visit_share:.0%} of search visits, "
-                f"Q-value {m.q_value:+.3f} ({label}), network prior {m.prior:.1%}"
+                f"Q-value {m.q_value:+.3f} ({_q_label(m.q_value)}), network prior {m.prior:.1%}"
             )
 
         return "\n".join(lines)
@@ -101,10 +119,9 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
     def compare_moves(game_id: str, column_a: int, column_b: int) -> str:
         """Compare two candidate moves side-by-side.
         Shows which column MCTS prefers and why (visit count, Q-value, prior)."""
-        session = engine.get_session(game_id)
-        if session is None:
-            return "Error: game not found"
-
+        session, err = _get_session_or_error(engine, game_id)
+        if err:
+            return err
         result = engine.evaluate(session)
         stats = {m.column: m for m in result.move_stats}
 
@@ -145,9 +162,9 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         """Analyze the full game move-by-move.
         Replays all moves, evaluates each position, and identifies
         the critical turning point (biggest evaluation swing)."""
-        session = engine.get_session(game_id)
-        if session is None:
-            return "Error: game not found"
+        session, err = _get_session_or_error(engine, game_id)
+        if err:
+            return err
 
         if len(session.move_history) < 2:
             return "Not enough moves to analyze. Play a few more moves first."
@@ -212,9 +229,9 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
     def get_game_state(game_id: str) -> str:
         """Get the current board state, whose turn it is, move history,
         and whether the game is over."""
-        session = engine.get_session(game_id)
-        if session is None:
-            return "Error: game not found"
+        session, err = _get_session_or_error(engine, game_id)
+        if err:
+            return err
         board = session.current_state.board
         symbols = {0: ".", -1: "X", 1: "O"}
         lines = ["Current board (X=Red/You, O=Yellow/AI):"]
@@ -298,9 +315,9 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         Compares what the player actually played vs what the engine would have recommended.
         Only works when there are at least 2 moves (player + AI response)."""
         import numpy as np
-        session = engine.get_session(game_id)
-        if session is None:
-            return "Error: game not found"
+        session, err = _get_session_or_error(engine, game_id)
+        if err:
+            return err
 
         if len(session.move_history) < 2:
             return "Not enough moves to evaluate."

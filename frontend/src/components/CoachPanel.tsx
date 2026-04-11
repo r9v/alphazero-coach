@@ -1,11 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
-import { api } from '../lib/api';
-
-interface Message {
-  role: 'coach' | 'user' | 'error';
-  content: string;
-}
+import { useCoachChat } from '../hooks/useCoachChat';
+import LoadingDots from './LoadingDots';
 
 interface Props {
   gameId: string | null;
@@ -13,16 +9,16 @@ interface Props {
   isTerminal: boolean;
 }
 
-const AUTO_MSG = 'A new move was played. Check the board state and best moves, then give a brief strategic tip.';
+const MESSAGE_STYLES = {
+  user: 'bg-accent/10 border border-accent/20 rounded-lg px-3 py-2 text-accent',
+  error: 'bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-red-400',
+  coach: 'text-text-primary leading-relaxed',
+} as const;
 
 export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [streaming, setStreaming] = useState(false);
+  const { messages, streaming, sendQuestion } = useCoachChat(gameId, moveNumber, isTerminal);
   const [question, setQuestion] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const lastAnalyzedMove = useRef(0);
-  const streamingRef = useRef(false);
-  const pendingMove = useRef<number | null>(null);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -30,92 +26,19 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
     }
   };
 
-  const appendToken = (token: string) => {
-    setMessages((prev) => {
-      const updated = [...prev];
-      const last = updated[updated.length - 1];
-      if (last && last.role === 'coach') {
-        updated[updated.length - 1] = { ...last, content: last.content + token };
-      }
-      return updated;
-    });
-    scrollToBottom();
-  };
-
-  const handleStreamError = (err: unknown) => {
-    streamingRef.current = false;
-    setStreaming(false);
-    const raw = err instanceof Error ? err.message : 'Coach unavailable';
-    const msg = raw.includes('429') || raw.includes('RESOURCE_EXHAUSTED') || raw.includes('quota') || raw.includes('rate')
-      ? 'LLM API rate limit reached. Try again later or check your API plan.'
-      : raw.includes('overloaded') || raw.includes('Overloaded') || raw.includes('529')
-      ? 'LLM API is temporarily overloaded. Try again in a few seconds.'
-      : raw;
-    setMessages((prev) => {
-      const updated = [...prev];
-      const last = updated[updated.length - 1];
-      if (last && last.role === 'coach' && !last.content) {
-        updated[updated.length - 1] = { role: 'error', content: msg };
-      } else {
-        updated.push({ role: 'error', content: msg });
-      }
-      return updated;
-    });
-  };
-
-  const doSend = useCallback((gid: string, message: string) => {
-    streamingRef.current = true;
-    setStreaming(true);
-    setMessages((prev) => [...prev, { role: 'coach', content: '' }]);
-    api.streamCoachChat(gid, message, appendToken, () => {
-      streamingRef.current = false;
-      setStreaming(false);
-      if (pendingMove.current !== null) {
-        lastAnalyzedMove.current = pendingMove.current;
-        pendingMove.current = null;
-      }
-    }).catch(handleStreamError);
-  }, []);
-
-  // Auto-analyze after each AI move
-  useEffect(() => {
-    if (!gameId || moveNumber < 2) return;
-    if (moveNumber % 2 !== 0) return;
-    if (moveNumber <= lastAnalyzedMove.current) return;
-
-    if (streamingRef.current) {
-      pendingMove.current = moveNumber;
-      return;
-    }
-    lastAnalyzedMove.current = moveNumber;
-    doSend(gameId, AUTO_MSG);
-  }, [gameId, moveNumber, doSend]);
-
-  // Trigger on game over
-  useEffect(() => {
-    if (!gameId || !isTerminal) return;
-    if (lastAnalyzedMove.current === -1) return;
-    lastAnalyzedMove.current = -1;
-
-    if (streamingRef.current) return;
-    doSend(gameId, 'The game is over. How did it go? What was the turning point?');
-  }, [gameId, isTerminal, doSend]);
-
-  // Reset on new game
-  useEffect(() => {
-    setMessages([]);
-    lastAnalyzedMove.current = 0;
-    pendingMove.current = null;
-  }, [gameId]);
+  // Scroll when messages change
+  const lastLen = useRef(0);
+  if (messages.length !== lastLen.current) {
+    lastLen.current = messages.length;
+    queueMicrotask(scrollToBottom);
+  }
 
   const handleAsk = useCallback(() => {
-    if (!gameId || !question.trim() || streamingRef.current) return;
-
+    if (!question.trim()) return;
     const q = question.trim();
     setQuestion('');
-    setMessages((prev) => [...prev, { role: 'user', content: q }]);
-    doSend(gameId, q);
-  }, [gameId, question, doSend]);
+    sendQuestion(q);
+  }, [question, sendQuestion]);
 
   return (
     <div className="bg-surface-alt rounded-xl border border-border flex flex-col h-96">
@@ -123,13 +46,7 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
         <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wide">
           AI Coach
         </h3>
-        {streaming && (
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse [animation-delay:150ms]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse [animation-delay:300ms]" />
-          </div>
-        )}
+        {streaming && <LoadingDots color="bg-green-400" />}
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -139,16 +56,7 @@ export default function CoachPanel({ gameId, moveNumber, isTerminal }: Props) {
           </p>
         ) : (
           messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`text-sm ${
-                msg.role === 'user'
-                  ? 'bg-accent/10 border border-accent/20 rounded-lg px-3 py-2 text-accent'
-                  : msg.role === 'error'
-                  ? 'bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-red-400'
-                  : 'text-text-primary leading-relaxed'
-              }`}
-            >
+            <div key={i} className={`text-sm ${MESSAGE_STYLES[msg.role]}`}>
               {msg.content ? (
                 msg.role === 'coach' ? <Markdown>{msg.content}</Markdown> : msg.content
               ) : (streaming && i === messages.length - 1 ? (

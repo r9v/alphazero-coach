@@ -1,4 +1,5 @@
 import type { EvalResult } from '../lib/api';
+import LoadingDots from './LoadingDots';
 
 interface Props {
   evaluation: EvalResult | null;
@@ -12,13 +13,7 @@ export default function MctsPanel({ evaluation, thinking }: Props) {
         <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wide">
           Your Next Recommended Move
         </h3>
-        {thinking && (
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse [animation-delay:150ms]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse [animation-delay:300ms]" />
-          </div>
-        )}
+        {thinking && <LoadingDots />}
       </div>
 
       {evaluation ? (

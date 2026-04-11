@@ -78,16 +78,9 @@ class Coach:
 
         history.append(HumanMessage(content=message))
 
-        # Build messages: keep only user messages + last coach response to force fresh tool calls
-        recent = []
-        coach_count = 0
-        for msg in reversed(history):
-            if isinstance(msg, AIMessage):
-                if coach_count >= 1:
-                    continue  # skip older coach responses
-                coach_count += 1
-            recent.append(msg)
-        recent.reverse()
+        # Keep all user messages but only the last coach response to force fresh tool calls
+        last_ai = next((i for i in range(len(history) - 1, -1, -1) if isinstance(history[i], AIMessage)), None)
+        recent = [msg for i, msg in enumerate(history) if not isinstance(msg, AIMessage) or i == last_ai]
 
         system = SYSTEM_PROMPT + f"\n\nThe current game ID is: {game_id}. Always use this game_id when calling tools."
         messages = [SystemMessage(content=system)] + recent[-MAX_HISTORY:]

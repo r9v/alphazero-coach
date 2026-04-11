@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type GameState, type EvalResult } from './lib/api';
 import Board from './components/Board';
+import Card from './components/Card';
 import MctsPanel from './components/MctsPanel';
 import GameInfo from './components/GameInfo';
 import CoachPanel from './components/CoachPanel';
@@ -140,10 +141,7 @@ export default function App() {
 
             {/* Move history */}
             {game.move_history.length > 0 && (
-              <div className="bg-surface-alt rounded-xl border border-border p-4">
-                <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wide mb-3">
-                  Move History
-                </h3>
+              <Card title="Move History">
                 <div className="flex flex-wrap gap-1">
                   {game.move_history.map((move, i) => (
                     <span
@@ -159,7 +157,7 @@ export default function App() {
                     </span>
                   ))}
                 </div>
-              </div>
+              </Card>
             )}
 
             {error && (

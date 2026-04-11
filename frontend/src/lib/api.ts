@@ -1,5 +1,14 @@
 const BASE = '';
 
+export function classifyApiError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : 'Coach unavailable';
+  if (/429|RESOURCE_EXHAUSTED|quota|rate/i.test(raw))
+    return 'LLM API rate limit reached. Try again later or check your API plan.';
+  if (/overloaded|529/i.test(raw))
+    return 'LLM API is temporarily overloaded. Try again in a few seconds.';
+  return raw;
+}
+
 export interface MoveStats {
   column: number;
   visits: number;

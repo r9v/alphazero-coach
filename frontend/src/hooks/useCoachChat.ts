@@ -6,8 +6,8 @@ export interface Message {
   content: string;
 }
 
-const AUTO_MSG = 'A new move was played. Check the board state and best moves, then give a brief strategic tip.';
-const GAME_OVER_MSG = 'The game is over. How did it go? What was the turning point?';
+const AUTO_MSG = 'A new move was played. Grade my last move, check the board, and recommend my next move. If a strategy concept applies, look it up.';
+const GAME_OVER_MSG = 'The game is over. Analyze the full game and tell me about the turning point.';
 
 export function useCoachChat(gameId: string | null, moveNumber: number, isTerminal: boolean) {
   const [messages, setMessages] = useState<Message[]>([]);

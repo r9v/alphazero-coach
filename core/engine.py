@@ -53,6 +53,8 @@ class GameSession:
     """A single game session tracking state history for undo support."""
     states: list            # list of GameState objects
     move_history: list[int] = field(default_factory=list)
+    _cached_eval: 'EvalResult | None' = field(default=None, repr=False)
+    _eval_history: dict = field(default_factory=dict, repr=False)  # move_number -> EvalResult
 
     @property
     def current_state(self):
@@ -129,6 +131,7 @@ class Engine:
         new_state = self.game.step(session.current_state, column)
         session.states.append(new_state)
         session.move_history.append(column)
+        session._cached_eval = None
         return session
 
     def ai_move(self, game_id: str) -> GameSession:
@@ -155,12 +158,21 @@ class Engine:
         new_state = self.game.step(session.current_state, action)
         session.states.append(new_state)
         session.move_history.append(action)
+        session._cached_eval = None
         return session
 
     def evaluate(self, session: GameSession, simulations: int | None = None) -> EvalResult:
-        """Run MCTS on the current position and return detailed stats."""
+        """Run MCTS on the current position and return detailed stats.
+        Results are cached per position — multiple callers get the same evaluation."""
+        if session.is_terminal:
+            raise ValueError("Cannot evaluate a terminal position")
+
+        sims = simulations or self.simulations
+        if session._cached_eval is not None and sims == self.simulations:
+            return session._cached_eval
+
         state = session.current_state
-        pi = self.mcts.get_policy(simulations or self.simulations, state)
+        pi = self.mcts.get_policy(sims, state)
         root = self.mcts.last_root
 
         best_action = int(np.argmax(pi))
@@ -186,12 +198,16 @@ class Engine:
         best_child = root.children[best_action]
         root_q = float(best_child.Q) if best_child and best_child.n > 0 else float(root.nnet_value)
 
-        return EvalResult(
+        result = EvalResult(
             best_action=best_action,
             root_value=root_q,
             total_simulations=total_sims,
             move_stats=move_stats,
         )
+        if sims == self.simulations:
+            session._cached_eval = result
+            session._eval_history[session.move_number] = result
+        return result
 
     def evaluate_position(self, game_id: str) -> EvalResult:
         """Evaluate the current position for a game session."""

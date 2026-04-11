@@ -82,6 +82,8 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         session, err = _get_session_or_error(engine, game_id)
         if err:
             return err
+        if session.is_terminal:
+            return "Game is over — no moves to evaluate."
         result = engine.evaluate(session)
 
         lines = [
@@ -99,19 +101,43 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
     def get_best_moves(game_id: str, top_k: int = 3) -> str:
         """Get the top-K best moves ranked by MCTS visit count.
         Each move includes visit share, Q-value (expected outcome),
-        and neural network prior probability."""
+        and neural network prior probability.
+        The #1 move by visit count is THE recommended move — always suggest it."""
         session, err = _get_session_or_error(engine, game_id)
         if err:
             return err
+        if session.is_terminal:
+            return "Game is over — no moves to recommend."
         result = engine.evaluate(session)
-        top = result.move_stats[:top_k]
+        # Only show moves with meaningful visit share (>1%) to avoid confusion
+        top = [m for m in result.move_stats[:top_k] if m.visit_share > 0.01]
+        if not top:
+            top = result.move_stats[:1]
 
-        lines = [f"Top {len(top)} moves ({result.total_simulations} simulations):"]
+        best = top[0]
+        lines = [
+            f"=== RECOMMENDED MOVE: Column {best.column} ===",
+            f"({result.total_simulations} simulations)",
+            "",
+        ]
+
+        # Identify close alternatives (within 20% visit share of the top move)
+        close = [m for m in top[1:] if m.visit_share >= best.visit_share * 0.8]
+
         for i, m in enumerate(top, 1):
+            label = ""
+            if i == 1:
+                label = " ← BEST"
+            elif m in close:
+                label = " ← also strong"
             lines.append(
                 f"  {i}. Column {m.column} — {m.visit_share:.0%} of search visits, "
-                f"Q-value {m.q_value:+.3f} ({_q_label(m.q_value)}), network prior {m.prior:.1%}"
+                f"Q-value {m.q_value:+.3f} ({_q_label(m.q_value)}), network prior {m.prior:.1%}{label}"
             )
+
+        if close:
+            cols = ", ".join(f"Column {m.column}" for m in close)
+            lines.append(f"\n  Note: {cols} {'is' if len(close) == 1 else 'are'} close — worth mentioning as alternative{'s' if len(close) > 1 else ''}.")
 
         return "\n".join(lines)
 
@@ -122,6 +148,8 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         session, err = _get_session_or_error(engine, game_id)
         if err:
             return err
+        if session.is_terminal:
+            return "Game is over — no moves to compare."
         result = engine.evaluate(session)
         stats = {m.column: m for m in result.move_stats}
 
@@ -314,9 +342,8 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
     @tool
     def evaluate_last_move(game_id: str) -> str:
         """Evaluate whether the player's last move was good or bad.
-        Compares what the player actually played vs what the engine would have recommended.
-        Only works when there are at least 2 moves (player + AI response)."""
-        import numpy as np
+        Compares what the player actually played vs what the engine recommended
+        at that position. Uses cached evaluation when available for consistency."""
         session, err = _get_session_or_error(engine, game_id)
         if err:
             return err
@@ -331,21 +358,30 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
             last_player_idx -= 1  # last move was AI's, step back to player's
         player_move = session.move_history[last_player_idx]
 
-        # Replay to the position BEFORE the player's move and evaluate
-        game_obj = engine.game
-        state = game_obj.new_game()
-        for m in session.move_history[:last_player_idx]:
-            state = game_obj.step(state, m)
+        # Use cached evaluation from when the player was deciding (consistent with what coach recommended)
+        cached = session._eval_history.get(last_player_idx)
+        if cached:
+            best_action = cached.best_action
+            stats = {m.column: m for m in cached.move_stats}
+            played = stats.get(player_move)
+            best = stats.get(best_action)
+            played_q = played.q_value if played else 0
+            best_q = best.q_value if best else 0
+        else:
+            # Fallback: replay and evaluate (for moves made before caching was active)
+            import numpy as np
+            game_obj = engine.game
+            state = game_obj.new_game()
+            for m in session.move_history[:last_player_idx]:
+                state = game_obj.step(state, m)
+            pi = engine.mcts.get_policy(400, state)
+            best_action = int(np.argmax(pi))
+            root = engine.mcts.last_root
+            played_child = root.children[player_move]
+            best_child = root.children[best_action]
+            played_q = float(played_child.Q) if played_child else 0
+            best_q = float(best_child.Q) if best_child else 0
 
-        pi = engine.mcts.get_policy(400, state)
-        best_action = int(np.argmax(pi))
-        root = engine.mcts.last_root
-
-        played_child = root.children[player_move]
-        best_child = root.children[best_action]
-
-        played_q = float(played_child.Q) if played_child else 0
-        best_q = float(best_child.Q) if best_child else 0
         diff = abs(best_q - played_q) * 100
 
         if player_move == best_action:
@@ -353,21 +389,17 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
         elif diff < 3:
             return (
                 f"Your move (column {player_move}) was fine — nearly as good as the engine's "
-                f"top pick (column {best_action}). Difference is negligible ({diff:.1f}%)."
+                f"top pick (column {best_action}). Difference is negligible."
             )
         elif diff < 10:
             return (
                 f"Your move (column {player_move}) was okay but not optimal. "
-                f"The engine preferred column {best_action} (Q-diff: {diff:.1f}%). "
-                f"Column {best_action} had {int(pi[best_action]*100)}% of visits vs "
-                f"your column {player_move} at {int(pi[player_move]*100)}%."
+                f"The engine preferred column {best_action}."
             )
         else:
             return (
                 f"Your move (column {player_move}) was a mistake. "
-                f"The engine strongly preferred column {best_action} (Q-diff: {diff:.1f}%). "
-                f"Column {best_action} had {int(pi[best_action]*100)}% of visits vs "
-                f"your column {player_move} at {int(pi[player_move]*100)}%."
+                f"The engine strongly preferred column {best_action}."
             )
 
     tools = [evaluate_position, get_best_moves, compare_moves, analyze_game,

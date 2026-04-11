@@ -21,6 +21,7 @@ export default function App() {
       const state = await api.newGame();
       setGame(state);
     } catch (e) {
+      setGame(null);
       setError(e instanceof Error ? e.message : 'Failed to start game');
     }
   }, []);

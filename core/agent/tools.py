@@ -179,11 +179,13 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
             pi = engine.mcts.get_policy(400, state)  # fewer sims for game replay speed
             root = engine.mcts.last_root
             best = int(np.argmax(pi))
+            best_child = root.children[best]
+            value = float(best_child.Q) if best_child and best_child.n > 0 else float(root.nnet_value)
             evals.append({
                 "move_num": i + 1,
                 "played": move,
                 "best": best,
-                "value": float(root.nnet_value),
+                "value": value,
                 "was_best": move == best,
             })
             state = game.step(state, move)

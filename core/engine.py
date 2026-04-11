@@ -138,16 +138,19 @@ class Engine:
 
         result = self.evaluate(session, simulations=self.ai_simulations)
 
-        # Add temperature in early game for variety (first 8 moves)
-        if session.move_number < 8:
-            visits = np.array([m.visit_share for m in result.move_stats])
-            cols = np.array([m.column for m in result.move_stats])
-            temp = 0.8 if session.move_number < 4 else 0.4
-            probs = visits ** (1 / temp)
-            probs = probs / probs.sum()
-            action = int(np.random.choice(cols, p=probs))
+        # Temperature schedule for move variety
+        if session.move_number < 6:
+            temp = 0.8
+        elif session.move_number < 11:
+            temp = 0.5
         else:
-            action = result.best_action
+            temp = 0.2
+
+        visits = np.array([m.visit_share for m in result.move_stats])
+        cols = np.array([m.column for m in result.move_stats])
+        probs = visits ** (1 / temp)
+        probs = probs / probs.sum()
+        action = int(np.random.choice(cols, p=probs))
 
         new_state = self.game.step(session.current_state, action)
         session.states.append(new_state)
@@ -177,9 +180,15 @@ class Engine:
 
         move_stats.sort(key=lambda m: m.visits, reverse=True)
 
+        # Use the search-corrected Q-value of the best move, not the raw nnet_value.
+        # nnet_value is the neural network's initial guess; Q is refined by MCTS search
+        # and is far more accurate (especially in endgame positions).
+        best_child = root.children[best_action]
+        root_q = float(best_child.Q) if best_child and best_child.n > 0 else float(root.nnet_value)
+
         return EvalResult(
             best_action=best_action,
-            root_value=float(root.nnet_value),
+            root_value=root_q,
             total_simulations=total_sims,
             move_stats=move_stats,
         )

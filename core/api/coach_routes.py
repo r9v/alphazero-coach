@@ -43,7 +43,8 @@ async def _sse_stream(generator):
 async def chat(game_id: str, req: ChatRequest, request: Request):
     """Stream a coach response in the game's conversation."""
     coach = _get_coach()
-    user_ip = request.client.host if request.client else "unknown"
+    from core.api.routes import _get_client_ip
+    user_ip = _get_client_ip(request)
     return StreamingResponse(
         _sse_stream(coach.chat(game_id, req.message, user_id=user_ip)),
         media_type="text/event-stream",

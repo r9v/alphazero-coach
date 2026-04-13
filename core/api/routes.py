@@ -9,6 +9,15 @@ from fastapi import APIRouter, HTTPException, Request
 MAX_GAMES_PER_DAY = int(os.environ.get("MAX_GAMES", "0"))  # 0 = unlimited
 _usage: dict[str, list[float]] = {}  # ip -> list of timestamps
 
+
+def _get_client_ip(request: Request) -> str:
+    """Get the real client IP, handling Cloudflare proxy."""
+    return (
+        request.headers.get("CF-Connecting-IP")
+        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+
 from core.api.models import (
     EvalResponse,
     GameStateResponse,
@@ -75,7 +84,7 @@ def _get_session(game_id: str) -> GameSession:
 @router.post("/new", response_model=GameStateResponse)
 def new_game(request: Request):
     if MAX_GAMES_PER_DAY:
-        ip = request.client.host if request.client else "unknown"
+        ip = _get_client_ip(request)
         now = time.time()
         day_ago = now - 86400
         # Prune old entries and count recent games

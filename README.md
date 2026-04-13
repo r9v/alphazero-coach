@@ -23,6 +23,7 @@ You can play it right now — **[click here for the live demo](https://alphazero
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 - **Game engine:** [alphazero-boardgames](https://github.com/r9v/alphazero-boardgames) (PyTorch, Cython MCTS, bitboard engine)
 - **LLM:** Google Gemini or Anthropic Claude (auto-detected from API key)
+- **Observability:** Langfuse — traces every LLM call, tool invocation, and agent step with session and user tracking
 
 ## How It Works
 

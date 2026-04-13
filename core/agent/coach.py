@@ -6,6 +6,16 @@ from collections.abc import AsyncIterator
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 
+# Langfuse observability (optional — only active if env vars are set)
+_langfuse_handler = None
+if os.environ.get("LANGFUSE_SECRET_KEY"):
+    try:
+        from langfuse.langchain import CallbackHandler
+        _langfuse_handler = CallbackHandler()
+        print("[coach] Langfuse tracing enabled")
+    except ImportError:
+        print("[coach] Langfuse not installed, skipping tracing")
+
 MAX_HISTORY = 50
 
 from core.agent.tools import make_tools
@@ -116,7 +126,7 @@ class Coach:
         self.agent = create_react_agent(llm, tools)
         self._history: dict[str, list] = {}
 
-    async def chat(self, game_id: str, message: str) -> AsyncIterator[str]:
+    async def chat(self, game_id: str, message: str, user_id: str | None = None) -> AsyncIterator[str]:
         """Send a message in the game's conversation, stream the response."""
         if game_id not in self._history:
             self._history[game_id] = []
@@ -134,44 +144,59 @@ class Coach:
         full_response = ""
         tools_ever_completed = False
         pending_tools = 0
-        # Buffer all text until tools have completed at least once
         buffered_text = ""
 
-        async for event in self.agent.astream_events(
-            {"messages": messages},
-            version="v2",
-        ):
-            kind = event["event"]
+        config = {}
+        if _langfuse_handler:
+            config["callbacks"] = [CallbackHandler()]
 
-            if kind == "on_tool_start":
-                pending_tools += 1
+        # Wrap in Langfuse session + user context if available
+        ctx = None
+        if _langfuse_handler:
+            from langfuse import propagate_attributes
+            ctx = propagate_attributes(session_id=game_id, user_id=user_id)
+            ctx.__enter__()
 
-            elif kind == "on_tool_end":
-                pending_tools -= 1
-                if pending_tools <= 0:
-                    tools_ever_completed = True
-                    buffered_text = ""
+        try:
+            async for event in self.agent.astream_events(
+                {"messages": messages},
+                version="v2",
+                config=config,
+            ):
+                kind = event["event"]
 
-            elif kind == "on_chat_model_stream":
-                chunk = event["data"].get("chunk")
-                if chunk and hasattr(chunk, "content") and chunk.content:
-                    content = chunk.content
-                    if isinstance(content, str):
-                        text_chunk = content
-                    elif isinstance(content, list):
-                        text_chunk = "".join(
-                            item.get("text", "") if isinstance(item, dict) else str(item)
-                            for item in content
-                        )
-                    else:
-                        text_chunk = ""
+                if kind == "on_tool_start":
+                    pending_tools += 1
 
-                    if text_chunk:
-                        if not tools_ever_completed or pending_tools > 0:
-                            buffered_text += text_chunk
+                elif kind == "on_tool_end":
+                    pending_tools -= 1
+                    if pending_tools <= 0:
+                        tools_ever_completed = True
+                        buffered_text = ""
+
+                elif kind == "on_chat_model_stream":
+                    chunk = event["data"].get("chunk")
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        content = chunk.content
+                        if isinstance(content, str):
+                            text_chunk = content
+                        elif isinstance(content, list):
+                            text_chunk = "".join(
+                                item.get("text", "") if isinstance(item, dict) else str(item)
+                                for item in content
+                            )
                         else:
-                            full_response += text_chunk
-                            yield text_chunk
+                            text_chunk = ""
+
+                        if text_chunk:
+                            if not tools_ever_completed or pending_tools > 0:
+                                buffered_text += text_chunk
+                            else:
+                                full_response += text_chunk
+                                yield text_chunk
+        finally:
+            if ctx:
+                ctx.__exit__(None, None, None)
 
         if full_response:
             history.append(AIMessage(content=full_response))

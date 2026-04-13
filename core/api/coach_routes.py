@@ -2,7 +2,7 @@
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -40,11 +40,12 @@ async def _sse_stream(generator):
 
 
 @coach_router.post("/{game_id}/chat")
-async def chat(game_id: str, req: ChatRequest):
+async def chat(game_id: str, req: ChatRequest, request: Request):
     """Stream a coach response in the game's conversation."""
     coach = _get_coach()
+    user_ip = request.client.host if request.client else "unknown"
     return StreamingResponse(
-        _sse_stream(coach.chat(game_id, req.message)),
+        _sse_stream(coach.chat(game_id, req.message, user_id=user_ip)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

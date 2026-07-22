@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
+from langgraph.errors import GraphRecursionError
 
 # Langfuse observability (optional — only active if env vars are set)
 _langfuse_handler = None
@@ -17,6 +18,11 @@ if os.environ.get("LANGFUSE_SECRET_KEY"):
         print("[coach] Langfuse not installed, skipping tracing")
 
 MAX_HISTORY = 50
+
+# Bound the ReAct tool-call loop so a runaway cycle hits a wall, not the token
+# budget. A coaching turn needs only a handful of tool calls; keep it well under
+# LangGraph's default of 25.
+COACH_RECURSION_LIMIT = int(os.environ.get("COACH_RECURSION_LIMIT", "15"))
 
 from core.agent.tools import make_tools
 from core.agent.rag import StrategyKB
@@ -155,7 +161,8 @@ class Coach:
         pending_tools = 0
         buffered_text = ""
 
-        config = {}
+        # Explicit loop bound rather than relying on LangGraph's default.
+        config = {"recursion_limit": COACH_RECURSION_LIMIT}
         if _langfuse_handler:
             config["callbacks"] = [CallbackHandler()]
 
@@ -203,6 +210,16 @@ class Coach:
                             else:
                                 full_response += text_chunk
                                 yield text_chunk
+        except GraphRecursionError:
+            # Loop hit the step ceiling; surface the best partial read instead of
+            # failing silently.
+            if not full_response:
+                fallback = buffered_text or (
+                    "I've hit my analysis step limit on this position. Ask me again "
+                    "and I'll take another pass."
+                )
+                full_response += fallback
+                yield fallback
         finally:
             if ctx:
                 ctx.__exit__(None, None, None)

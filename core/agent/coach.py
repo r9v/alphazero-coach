@@ -20,6 +20,8 @@ MAX_HISTORY = 50
 
 from core.agent.tools import make_tools
 from core.agent.rag import StrategyKB
+from core.agent.query_expansion import HyDEExpander
+from core.agent.guardrails import scan_input, harden_prompt
 from core.engine import Engine
 
 
@@ -120,7 +122,8 @@ class Coach:
 
     def __init__(self, engine: Engine):
         self.engine = engine
-        self.kb = StrategyKB()
+        # Hybrid RAG with optional HyDE query expansion (enabled via RAG_HYDE).
+        self.kb = StrategyKB(hyde=HyDEExpander.from_env())
         tools = make_tools(engine, self.kb)
         llm = _make_llm()
         self.agent = create_react_agent(llm, tools)
@@ -134,11 +137,17 @@ class Coach:
 
         history.append(HumanMessage(content=message))
 
+        # Guardrail: scan untrusted player input for prompt-injection signatures
+        # and harden the system prompt when anything looks suspicious.
+        guard = scan_input(message)
+        if guard.flagged:
+            print(f"[coach] guardrail flagged input {guard.reasons} (score={guard.score:.2f})")
+
         # Keep all user messages but only the last coach response to force fresh tool calls
         last_ai = next((i for i in range(len(history) - 1, -1, -1) if isinstance(history[i], AIMessage)), None)
         recent = [msg for i, msg in enumerate(history) if not isinstance(msg, AIMessage) or i == last_ai]
 
-        system = SYSTEM_PROMPT + f"\n\nThe current game ID is: {game_id}. Always use this game_id when calling tools."
+        system = harden_prompt(SYSTEM_PROMPT, guard) + f"\n\nThe current game ID is: {game_id}. Always use this game_id when calling tools."
         messages = [SystemMessage(content=system)] + recent[-MAX_HISTORY:]
 
         full_response = ""

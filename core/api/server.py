@@ -1,5 +1,6 @@
 """FastAPI application with engine lifecycle management."""
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -38,12 +39,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# The API is same-origin in production (FastAPI serves the built SPA) and needs
+# cross-origin access only for the Vite dev server. Restrict to a configurable
+# allowlist; credentials are off since the API uses no cookies or auth (and the
+# wildcard-origin + credentials combination is rejected by browsers anyway).
+_DEFAULT_ORIGINS = "http://localhost:5173,http://localhost:8000,https://alphazero-coach.xyz"
+_allowed_origins = [
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",") if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 app.include_router(router)

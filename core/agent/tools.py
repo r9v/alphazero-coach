@@ -322,9 +322,10 @@ def make_tools(engine: Engine, kb: StrategyKB | None = None):
     @tool
     def search_strategy(query: str) -> str:
         """Search the Connect 4 strategy knowledge base for concepts related to the query.
-        Use this to find expert strategy information about topics like center control,
-        odd/even threat theory, double threats, tempo, openings, or tactical patterns.
-        Returns relevant strategy excerpts with source citations."""
+        Backed by a hybrid retrieval pipeline (dense + BM25 fused with RRF, then
+        cross-encoder reranking). Use this to find expert strategy information about
+        topics like center control, odd/even threat theory, double threats, tempo,
+        openings, or tactical patterns. Returns relevant excerpts with source citations."""
         if kb is None:
             return "Strategy knowledge base not available."
 
